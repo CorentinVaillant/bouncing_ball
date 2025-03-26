@@ -1,8 +1,9 @@
 use core::f32;
+use std::{cell::RefCell, rc::Rc};
 
 use ball::Ball;
-use canva::{Canva, CanvaDrawable};
-use draw::Drawable;
+use canva::{Canva, CanvaData, CanvaRef};
+use traits::{CanvaDrawable, Drawable};
 use glium::{
     Display, Program, Surface, backend,
     glutin::surface::WindowSurface,
@@ -15,10 +16,10 @@ use glium::{
 };
 
 mod ball;
-mod draw;
 mod canva;
 mod constants;
 mod vertex;
+mod traits;
 
 fn main() {
     let event_loop = EventLoop::new().unwrap();
@@ -29,21 +30,20 @@ fn main() {
     let frag_shad = std::fs::read_to_string("./shaders/ball.frag").unwrap();
     let vert_shad = std::fs::read_to_string("./shaders/ball.vert").unwrap();
     let program = Program::from_source(&display, &vert_shad, &frag_shad, None).unwrap();
-    let balls = vec![
-        Ball::new(100., [200.; 2]),
-        // Ball::new(50., [100.;2]),
-    ];
+    
+    let canva = Rc::new(RefCell::new(Canva::new((0.,0.), program)));
 
-    let canva = Canva::new(balls,(0.,0.), program);
-
+    Ball::new_into_canva(100., [200.;2], canva.clone()).unwrap();
+    Ball::new_into_canva(25., [100.;2], canva.clone()).unwrap();
+    
     let mut app = App {
-        canva,
+        main_canva: canva,
 
         dt: 0.,
         time: std::time::Instant::now(),
 
         display,
-        window,
+        _window: window,
 
         mouse_position: (0., 0.),
         mouse_cliking: false,
@@ -54,13 +54,13 @@ fn main() {
 }
 
 struct App {
-    canva: Canva<Ball>,
+    main_canva: CanvaRef,
 
     dt: f32,
     time: std::time::Instant,
 
     display: Display<WindowSurface>,
-    window: Window,
+    _window: Window,
 
     mouse_position: (f32, f32),
     mouse_cliking: bool,
@@ -70,8 +70,8 @@ impl App {
     fn draw(&mut self) {
         let mut target = self.display.draw();
 
-        target.clear_color(0., 0., 0., 1.);
-        self.canva.draw(&self.display, &mut target);
+        target.clear_color(0.03,0.03,0.03, 1.);
+        self.main_canva.borrow().draw(&self.display, &mut target).unwrap();
 
         target.finish().unwrap()
     }
@@ -101,16 +101,13 @@ impl ApplicationHandler for App {
                 },
                 glium::winit::keyboard::PhysicalKey::Unidentified(_) => (),
             },
+            
             WindowEvent::Resized(new_size) => {
                 self.display.resize(new_size.into());
+                self.main_canva.borrow_mut().window_resized(new_size.into());
             }
             WindowEvent::Moved(pos) => {
-                println!("moved : {pos:?}");
-                let [x, y]: [f32; 2] = pos.into();
-                for balls in &mut self.canva.elements {
-                    balls.position[0] -= x;
-                    balls.position[1] -= y;
-                }
+                self.main_canva.borrow_mut().window_moved(pos.into());
             }
 
             WindowEvent::CursorMoved {
@@ -118,19 +115,15 @@ impl ApplicationHandler for App {
                 position,
             } => {
 
-
-                let rel_position = (position.x as f32 / self.window.inner_size().width as f32, position.y as f32 / self.window.inner_size().height as f32);
-
-                //dragging
-                if self.mouse_cliking {
-                    for ball in &mut self.canva.elements{
-                        if ball.is_coord_in_relative(rel_position){
-                            ball.on_drag(self.mouse_position.into(), rel_position.into());
-                        }
+                let new_pos = position.into();
+                //draging
+                if self.mouse_cliking{
+                    if self.main_canva.borrow().is_relative_coord_in(self.mouse_position){
+                        self.main_canva.borrow_mut().on_drag(self.mouse_position.into(), new_pos);
                     }
                 }
-
-                self.mouse_position = rel_position;
+                
+                self.mouse_position = new_pos.into();
             }
             WindowEvent::MouseInput {
                 device_id: _,
@@ -139,17 +132,13 @@ impl ApplicationHandler for App {
             } => match (button, state) {
                 (MouseButton::Left, ElementState::Pressed) => { 
                     self.mouse_cliking = true;
-                    if self.canva.is_coord_in_relative(self.mouse_position){
-                        self.canva.on_click(self.mouse_position);
+                    if self.main_canva.borrow().is_relative_coord_in(self.mouse_position){
+                        self.main_canva.borrow_mut().on_click(self.mouse_position);
                     }
                 },
                 (MouseButton::Left, ElementState::Released) => {
                     self.mouse_cliking = false;
-                    for ball in &mut self.canva.elements {
-                        if ball.is_coord_in_relative(self.mouse_position) {
-                            ball.on_click_release();
-                        }
-                    }
+                    self.main_canva.borrow_mut().on_click_release();
                 },
                 _ => (),
             },
@@ -188,7 +177,7 @@ impl ApplicationHandler for App {
                 self.time = now;
 
                 //ball
-                self.canva.update(self.dt, &self.window);
+                self.main_canva.borrow_mut().update(&DUMMY_CANVA_INFO,self.dt);
 
                 //draw
                 self.draw();
@@ -197,3 +186,11 @@ impl ApplicationHandler for App {
         }
     }
 }
+
+
+const DUMMY_CANVA_INFO:CanvaData=CanvaData{
+    size: (0.,0.),
+    position: (0.,0.),
+
+    window_resolution:(0,0),
+};

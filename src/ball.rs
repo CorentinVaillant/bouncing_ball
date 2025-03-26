@@ -1,17 +1,16 @@
-#![allow(dead_code, unused_variables)]
+// #![allow(dead_code, unused_variables)]
 
 const PHYSIC_SUB_STEP: u16 = 10;
 
-use glium::{implement_vertex, uniform, uniforms::Uniforms, winit::window::Window};
+use std::cell::BorrowMutError;
 
-use crate::{
-    canva::CanvaDrawable,
-    constants::{FRICTION_COEF, GRAVITY_CONST, MOUSE_ACCELERATION_FACTOR},
-};
+use glium::dynamic_uniform;
+
+use crate::{canva::{CanvaData, CanvaRef}, constants::{FRICTION_COEF, GRAVITY_CONST, MOUSE_ACCELERATION_FACTOR}, traits::CanvaDrawable};
 
 pub type Color = [f32; 3];
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone)]
 pub struct Ball {
     pub size: f32,
     pub color: Color,
@@ -25,9 +24,9 @@ pub struct Ball {
     pub do_physics: bool,
     pub mass: f32,
     pub bounce: f32,
-}
 
-implement_vertex!(Ball, position);
+    parent : Option<CanvaRef>
+}
 
 impl Ball {
     pub fn new(size: f32, pos: [f32; 2]) -> Self {
@@ -35,7 +34,7 @@ impl Ball {
             size,
             color: [1.; 3],
 
-            z: 0.,
+            z: 1.,
 
             position: pos,
             speed: [100.; 2],
@@ -44,35 +43,35 @@ impl Ball {
             do_physics: true,
             mass: size / 2.,
             bounce: 0.30,
+
+            parent :None,
         }
     }
+
+    pub fn new_into_canva(size: f32, pos: [f32; 2],canva:CanvaRef)-> Result<(), BorrowMutError>{
+        let new = Self::new(size, pos);
+
+        new.set_canva_parent(canva)
+    }
 }
+
 
 impl CanvaDrawable for Ball {
     fn set_z(&mut self, z: f32) {
         self.z = z;
     }
+
     fn get_z(&self) -> f32 {
         self.z
     }
 
-    fn to_uniform(&self, target_dimension: (u32, u32)) -> Vec<impl Uniforms> {
-        vec![uniform! {
-            position:self.position,
-            radius:self.size,
-            color:self.color,
-            z: self.z,
-            resolution : target_dimension
-        }]
+    fn set_canva_parent(mut self, canva:CanvaRef) ->Result<(),BorrowMutError>{
+        self.parent = Some(canva.clone());
+        canva.try_borrow_mut()?.elements.push(Box::new(self));
+        Ok(())
     }
 
-    fn is_coord_in_relative(&self, coord: (f32, f32)) -> bool {
-        println!("distance :{}, size :{}",((self.position[0] - coord.0).powi(2) + (self.position[1] - coord.1).powi(2)).sqrt(), self.size);
-        ((self.position[0] - coord.0).powi(2) + (self.position[1] - coord.1).powi(2)).sqrt()
-            < self.size
-    }
-
-    fn update(&mut self, dt: f32, window: &Window) {
+    fn update(&mut self,canva_info:&CanvaData, dt: f32) {
         let [x, y] = &mut self.position;
         let [s_x, s_y] = &mut self.speed;
         let [a_x, a_y] = &mut self.acc;
@@ -85,12 +84,11 @@ impl CanvaDrawable for Ball {
                 *a_y = 0.0;
 
                 // Compute forces
-                let (b_x, b_y): (f32, f32) = window.inner_size().into();
+
+                let (b_x, b_y): (f32, f32) = (canva_info.size.0 * canva_info.window_resolution.0 as f32, canva_info.size.1 * canva_info.window_resolution.1 as f32, );
 
                 //Gravity
                 *a_y -= GRAVITY_CONST * self.mass;
-
-
 
                 // //Spring like bounce
                 // if *x < self.size || (*x - b_x).abs() < self.size {
@@ -126,19 +124,27 @@ impl CanvaDrawable for Ball {
                 *s_x *= 1. - FRICTION_COEF * dt;
                 *s_y *= 1. - FRICTION_COEF * dt;
 
-                // Update position
-                let old_pos = (*x,*y);
-
                 *x += *s_x * dt;
                 *y += *s_y * dt;
             }
-
-            //changing color over speed
-            let acc = ((*a_x-GRAVITY_CONST).powi(2) + (*a_y-GRAVITY_CONST).powi(2)).sqrt();
-            let t = (acc-GRAVITY_CONST ).exp();
-            self.color = [(1.0 - t), 0.1, t];
+            
+            
+            //todo fixme : better color 
+            let force_magnitude = (a_x.powi(2) + a_y.powi(2)).sqrt();
+            let color_intensity = (force_magnitude / 1000.0).clamp(0.0, 1.0); // Adjust scaling factor as needed
+            self.color = [color_intensity, 0.1, 1.0 - color_intensity];
         }
     }
+    
+    fn canva_uniform(&self)->glium::uniforms::DynamicUniforms {
+        dynamic_uniform! {
+            position:&self.position,
+            radius: &self.size,
+            color:&self.color,
+            z:&self.z,
+        }
+    }
+
 
     fn on_click(&mut self,_:(f32,f32)) {
         self.do_physics = false;
@@ -154,4 +160,36 @@ impl CanvaDrawable for Ball {
         self.speed = [new_pos[0]-old_pos[0],new_pos[1]-old_pos[1]];
         self.speed = [self.speed[0]*MOUSE_ACCELERATION_FACTOR,self.speed[1]*MOUSE_ACCELERATION_FACTOR];
     }
+    
+
 }
+
+// impl CanvaDrawable for Ball {
+//     fn set_z(&mut self, z: f32) {
+//         self.z = z;
+//     }
+//     fn get_z(&self) -> f32 {
+//         self.z
+//     }
+
+//     fn draw(&self) -> DynamicUniforms {
+
+//         dynamic_uniform! {
+//             position : &self.position,
+//             radius: &self.size,
+//             color: &self.color,
+//             z:&self.color,
+//         }
+//     }
+
+    
+
+//     fn is_relative_coord_in(&self, coord: (f32, f32)) -> bool {
+
+//         println!("distance :{}, size :{}",((self.position[0] - coord.0).powi(2) + (self.position[1] - coord.1).powi(2)).sqrt(), self.size);
+//         ((self.position[0] - coord.0).powi(2) + (self.position[1] - coord.1).powi(2)).sqrt()
+//             < self.size
+//     }
+
+
+// }
