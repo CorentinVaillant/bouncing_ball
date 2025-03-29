@@ -2,11 +2,9 @@
 
 const PHYSIC_SUB_STEP: u16 = 10;
 
-use std::cell::BorrowMutError;
-
 use glium::dynamic_uniform;
 
-use crate::{canva::{CanvaData, CanvaRef}, constants::{FRICTION_COEF, GRAVITY_CONST, MOUSE_ACCELERATION_FACTOR}, traits::CanvaDrawable};
+use crate::{canvas::CanvasData, constants::{FRICTION_COEF, GRAVITY_CONST, MOUSE_ACCELERATION_FACTOR}, traits::CanvasDrawable};
 
 pub type Color = [f32; 3];
 
@@ -24,8 +22,6 @@ pub struct Ball {
     pub do_physics: bool,
     pub mass: f32,
     pub bounce: f32,
-
-    parent : Option<CanvaRef>
 }
 
 impl Ball {
@@ -43,20 +39,12 @@ impl Ball {
             do_physics: true,
             mass: size / 2.,
             bounce: 0.30,
-
-            parent :None,
         }
-    }
-
-    pub fn new_into_canva(size: f32, pos: [f32; 2],canva:CanvaRef)-> Result<(), BorrowMutError>{
-        let new = Self::new(size, pos);
-
-        new.set_canva_parent(canva)
     }
 }
 
 
-impl CanvaDrawable for Ball {
+impl CanvasDrawable for Ball {
     fn set_z(&mut self, z: f32) {
         self.z = z;
     }
@@ -65,13 +53,8 @@ impl CanvaDrawable for Ball {
         self.z
     }
 
-    fn set_canva_parent(mut self, canva:CanvaRef) ->Result<(),BorrowMutError>{
-        self.parent = Some(canva.clone());
-        canva.try_borrow_mut()?.elements.push(Box::new(self));
-        Ok(())
-    }
-
-    fn update(&mut self,canva_info:&CanvaData, dt: f32) {
+    fn update(&mut self,canva_info:&CanvasData, dt: f32) {
+        
         let [x, y] = &mut self.position;
         let [s_x, s_y] = &mut self.speed;
         let [a_x, a_y] = &mut self.acc;
@@ -129,20 +112,21 @@ impl CanvaDrawable for Ball {
             }
             
             
-            //todo fixme : better color 
             let force_magnitude = (a_x.powi(2) + a_y.powi(2)).sqrt();
-            let color_intensity = (force_magnitude / 1000.0).clamp(0.0, 1.0); // Adjust scaling factor as needed
+            let max_force = 500.0;
+            let color_intensity = (force_magnitude / max_force).clamp(0.0, 1.0);
             self.color = [color_intensity, 0.1, 1.0 - color_intensity];
+
         }
     }
     
-    fn canva_uniform(&self)->glium::uniforms::DynamicUniforms {
-        dynamic_uniform! {
+    fn canvas_uniforms(&self)->Vec<glium::uniforms::DynamicUniforms> {
+        vec![dynamic_uniform! {
             position:&self.position,
             radius: &self.size,
             color:&self.color,
             z:&self.z,
-        }
+        }]
     }
 
 
@@ -156,40 +140,27 @@ impl CanvaDrawable for Ball {
     }
 
     fn on_drag(&mut self,old_pos:[f32;2],new_pos:[f32;2]) {
+        self.do_physics = false;
         self.position = new_pos;
         self.speed = [new_pos[0]-old_pos[0],new_pos[1]-old_pos[1]];
         self.speed = [self.speed[0]*MOUSE_ACCELERATION_FACTOR,self.speed[1]*MOUSE_ACCELERATION_FACTOR];
     }
+
+    fn is_absolute_coord_in(&self, coord: (f32, f32),) -> bool {
+        let distance = (
+            (self.position[0]-coord.0).powi(2) + (self.position[1]-coord.1).powi(2) 
+        ).sqrt();
+
+        distance < self.size
+    }
+
+    fn on_window_moved(&mut self,new_pos :(f32,f32)) {
+        self.position[0]-=new_pos.0; 
+        self.position[1]-=new_pos.1; 
+    }
     
+    // fn on_window_resized(&mut self,new_size :(u32,u32)) {
+    //     // self.position[1]+=new_size.1 as f32;
+    // }
 
 }
-
-// impl CanvaDrawable for Ball {
-//     fn set_z(&mut self, z: f32) {
-//         self.z = z;
-//     }
-//     fn get_z(&self) -> f32 {
-//         self.z
-//     }
-
-//     fn draw(&self) -> DynamicUniforms {
-
-//         dynamic_uniform! {
-//             position : &self.position,
-//             radius: &self.size,
-//             color: &self.color,
-//             z:&self.color,
-//         }
-//     }
-
-    
-
-//     fn is_relative_coord_in(&self, coord: (f32, f32)) -> bool {
-
-//         println!("distance :{}, size :{}",((self.position[0] - coord.0).powi(2) + (self.position[1] - coord.1).powi(2)).sqrt(), self.size);
-//         ((self.position[0] - coord.0).powi(2) + (self.position[1] - coord.1).powi(2)).sqrt()
-//             < self.size
-//     }
-
-
-// }
