@@ -1,92 +1,92 @@
 #![allow(dead_code)]
 
-
 use std::{cell::RefCell, rc::Rc};
 
 use glium::{
-    backend::Facade, dynamic_uniform, index::PrimitiveType, DepthTest, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer
+    DepthTest, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer, backend::Facade,
+    dynamic_uniform, index::PrimitiveType,
 };
 
-use crate::{traits::{self, CanvasDrawable, Drawable}, vertex::Vertex};
+use crate::{
+    traits::{self, CanvasDrawable, Drawable},
+    vertex::Vertex,
+};
 
 pub type CanvaRef = Rc<RefCell<Canvas>>;
 
 pub struct Canvas {
-
-    pub data:CanvasData,
+    pub data: CanvasData,
     pub elements: Vec<Box<dyn CanvasDrawable>>,
 
     program: Program,
 
-    
-    z : f32,
+    z: f32,
 }
 
-#[derive(Debug,Clone, Copy)]
-pub struct CanvasData{
-    pub size: (f32,f32),
-    pub position : (f32,f32), //%
+#[derive(Debug, Clone, Copy)]
+pub struct CanvasData {
+    pub size: (f32, f32),
+    pub position: (f32, f32), //%
 
-    pub window_resolution:(u32,u32),
-
-
+    pub window_resolution: (u32, u32),
 }
 
-impl Canvas{
-    pub fn new(position:(f32,f32) ,program: Program) -> Self {
+impl Canvas {
+    pub fn new(position: (f32, f32), program: Program) -> Self {
         Self {
-            data :CanvasData{
+            data: CanvasData {
                 position,
-                size : (1.,1.),
+                size: (1., 1.),
 
-                window_resolution:(0,0),
+                window_resolution: (0, 0),
             },
-            elements:vec![],
+            elements: vec![],
             program,
 
-            z:0.,
+            z: 0.,
         }
     }
 
-    pub fn push_elem(&mut self, element : Box<dyn CanvasDrawable>){
+    pub fn push_elem(&mut self, element: Box<dyn CanvasDrawable>) {
         self.elements.push(element);
     }
 
-    pub fn append_elem(&mut self, elems_vec: Vec<Box<dyn CanvasDrawable>>){
+    pub fn append_elem(&mut self, elems_vec: Vec<Box<dyn CanvasDrawable>>) {
         let mut vec = elems_vec;
         self.elements.append(&mut vec);
     }
 }
 
-impl Drawable for Canvas{
-    fn draw<F: Facade + Sized>(&self, facade: &F, target: &mut Frame) -> Result<(), traits::DrawError> {
+impl Drawable for Canvas {
+    fn draw<F: Facade + Sized>(
+        &self,
+        facade: &F,
+        target: &mut Frame,
+    ) -> Result<(), traits::DrawError> {
         let (vert_buff, ind_buff) = self.get_vert_buff(facade).unwrap();
 
         let mut param = DrawParameters::default();
-        param.depth.test = DepthTest::IfMore;
+        param.depth.test = DepthTest::IfMoreOrEqual;
 
-
-        for elem in &self.elements{
+        for elem in &self.elements {
             let mut uniforms = elem.canvas_uniforms();
-    
-            for uni in &mut uniforms{
 
-                uni.add("canva_z",&self.z,);
-                uni.add("canva_pos",&self.data.position,);
-                uni.add("canva_size",&self.data.size);
-                
+            for uni in &mut uniforms {
+                uni.add("canva_z", &self.z);
+                uni.add("canva_pos", &self.data.position);
+                uni.add("canva_size", &self.data.size);
+
                 target
                     .draw(&vert_buff, &ind_buff, &self.program, uni, &param)
                     .unwrap();
             }
-            
-        };
+        }
 
         Ok(())
     }
 }
 
-impl CanvasDrawable for Canvas{
+impl CanvasDrawable for Canvas {
     fn set_z(&mut self, z: f32) {
         self.z = z;
     }
@@ -95,7 +95,7 @@ impl CanvasDrawable for Canvas{
         self.z
     }
 
-    fn canvas_uniforms(&self)->Vec<glium::uniforms::DynamicUniforms> {
+    fn canvas_uniforms(&self) -> Vec<glium::uniforms::DynamicUniforms> {
         vec![dynamic_uniform! {
             canva_z : &self.z,
             canva_pos:&self.data.position,
@@ -103,54 +103,59 @@ impl CanvasDrawable for Canvas{
         }]
     }
 
-    fn update(&mut self,_canva_info:&CanvasData ,dt: f32) {
-        for elem in &mut self.elements{
-            elem.update(&self.data,dt);
+    fn update(&mut self, _canva_info: &CanvasData, dt: f32) {
+        for elem in &mut self.elements {
+            elem.update(&self.data, dt);
         }
     }
 
-    fn on_window_resized(&mut self,new_size :(u32,u32)) {
-        self.data.window_resolution=new_size;
-        for elem in &mut self.elements{
+    fn on_window_resized(&mut self, new_size: (u32, u32)) {
+        self.data.window_resolution = new_size;
+        for elem in &mut self.elements {
             elem.on_window_resized(new_size);
         }
     }
 
-    fn on_drag(&mut self,old_pos:[f32;2],new_pos:[f32;2]) {
-        for elem in &mut self.elements{
-            if elem.is_absolute_coord_in(old_pos.into()){
+    fn on_drag(&mut self, old_pos: [f32; 2], new_pos: [f32; 2]) {
+        for elem in &mut self.elements {
+            if elem.is_absolute_coord_in(old_pos.into()) {
                 elem.on_drag(old_pos, new_pos);
             }
         }
     }
 
-
-    fn is_absolute_coord_in(&self, coord: (f32, f32),) -> bool {
-        0. <= coord.0 && coord.0 <= self.data.position.0 + self.data.size.0 * self.data.window_resolution.0 as f32 &&
-        0. <= coord.1 && coord.1 <= self.data.position.1 + self.data.size.1 * self.data.window_resolution.1 as f32 
+    fn is_absolute_coord_in(&self, coord: (f32, f32)) -> bool {
+        0. <= coord.0
+            && coord.0
+                <= self.data.position.0 + self.data.size.0 * self.data.window_resolution.0 as f32
+            && 0. <= coord.1
+            && coord.1
+                <= self.data.position.1 + self.data.size.1 * self.data.window_resolution.1 as f32
     }
 
-    fn is_relative_coord_in(&self, coord: (f32, f32),) -> bool {
-        0. <= coord.0 && coord.0 <= self.data.position.0 + self.data.size.0  &&
-        0. <= coord.1 && coord.1 <= self.data.position.1 + self.data.size.1  
+    fn is_relative_coord_in(&self, coord: (f32, f32)) -> bool {
+        0. <= coord.0
+            && coord.0 <= self.data.position.0 + self.data.size.0
+            && 0. <= coord.1
+            && coord.1 <= self.data.position.1 + self.data.size.1
     }
 
-    fn on_click(&mut self,coord:(f32,f32)) {
-        for elem in &mut self.elements{
-            if elem.is_absolute_coord_in(coord){
+    fn on_click(&mut self, coord: (f32, f32)) {
+        for elem in &mut self.elements {
+            if elem.is_absolute_coord_in(coord) {
                 elem.on_click(coord);
             }
         }
     }
 
     fn on_click_release(&mut self) {
-        for elem in &mut self.elements{
+        for elem in &mut self.elements {
             elem.on_click_release();
         }
     }
 
-    fn on_window_moved(&mut self,new_pos :(f32,f32)) {
-        for elem in &mut self.elements{
+    fn on_window_moved(&mut self, new_pos: (f32, f32)) {
+        for elem in &mut self.elements {
             elem.on_window_moved(new_pos);
         }
     }
@@ -173,7 +178,6 @@ impl Canvas {
         let x_s = ((self.data.position.0 + self.data.size.0) * 2.0) - 1.0;
         let y_s = ((self.data.position.1 + self.data.size.1) * 2.0) - 1.0;
 
-
         let vert_buff = VertexBuffer::new(
             facade,
             &[
@@ -190,5 +194,4 @@ impl Canvas {
 
         Ok((vert_buff, ind_buff))
     }
-
 }
