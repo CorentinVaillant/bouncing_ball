@@ -270,8 +270,10 @@ impl Ball {
     
     pub fn handle_color(&mut self){
         let force_magnitude = (self.acc[0].powi(2) + self.acc[1].powi(2)).sqrt() * self.mass;
-        let flat_fac = 1000.;
-        let color_intensity = (-force_magnitude/flat_fac-1.).recip()+1.;
+        let flat_fac = 100.;
+        let trans_fac = 10.;
+        let f = trans_fac-force_magnitude/flat_fac;
+        let color_intensity = (f+1.).recip();
         self.color = [color_intensity, 0., 1.0 - color_intensity];
     }
 }
