@@ -1,6 +1,6 @@
 use core::f32;
 
-use ball::Ball;
+use one_ball::Ball;
 use balls::Balls;
 use canvas::{Canvas, CanvasData};
 use glium::{
@@ -15,7 +15,7 @@ use glium::{
 };
 use traits::{CanvasDrawable, Drawable};
 
-mod ball;
+mod one_ball;
 mod balls;
 mod canvas;
 mod constants;
@@ -34,16 +34,25 @@ fn main() {
 
     let mut canva = Canvas::new((0., 0.), program);
 
+    let balls = (0..150)
+      .map(|i|{let i = i as f32; 
+        Ball::new(i.sin().abs() * 20., [i*20. % window.inner_size().width as f32,i*20. % window.inner_size().height as f32])})
+      .collect();
+
     canva.push_elem(Box::new(Balls {
-        balls: vec![Ball::new(50., [20.; 2]); 20],
+        balls,
         z: 0.,
     }));
+
 
     let mut app = App {
         main_canva: canva,
 
         dt: 0.,
         time: std::time::Instant::now(),
+        frame_nb_since_startup :0,
+        time_since_startup: std::time::Instant::now(),
+
 
         display,
         _window: window,
@@ -61,6 +70,8 @@ struct App {
 
     dt: f32,
     time: std::time::Instant,
+    frame_nb_since_startup : u32,
+    time_since_startup: std::time::Instant,
 
     display: Display<WindowSurface>,
     _window: Window,
@@ -100,6 +111,7 @@ impl ApplicationHandler for App {
             } => match event.physical_key {
                 glium::winit::keyboard::PhysicalKey::Code(key_code) => match key_code {
                     glium::winit::keyboard::KeyCode::Escape => event_loop.exit(),
+                    glium::winit::keyboard::KeyCode::KeyF=> self.print_fps(),
                     _ => (),
                 },
                 glium::winit::keyboard::PhysicalKey::Unidentified(_) => (),
@@ -142,17 +154,6 @@ impl ApplicationHandler for App {
                     self.mouse_cliking = false;
                     self.main_canva.on_click_release();
                 }
-
-                (MouseButton::Right, ElementState::Released) => {
-                    let mut ball = Box::new(Ball::new(25., self.mouse_position.into()));
-                    ball.speed = (
-                        self.mouse_position.0.powi(2).sin() * 4.
-                            + self.mouse_position.1.exp().cos(),
-                        self.mouse_position.0.sqrt().sin() + self.mouse_position.1.ln().cos(),
-                    )
-                        .into();
-                    self.main_canva.push_elem(ball);
-                }
                 _ => (),
             },
 
@@ -188,6 +189,7 @@ impl ApplicationHandler for App {
                 let now = std::time::Instant::now();
                 self.dt = now.duration_since(self.time).as_secs_f32();
                 self.time = now;
+                self.frame_nb_since_startup +=1;
 
                 //ball
                 self.main_canva.update(&DUMMY_CANVA_INFO, self.dt);
@@ -206,3 +208,10 @@ const DUMMY_CANVA_INFO: CanvasData = CanvasData {
 
     window_resolution: (0, 0),
 };
+
+
+impl App{
+    fn print_fps(&self){
+        println!("average fps since startup :{}", self.frame_nb_since_startup as f32 / self.time.duration_since(self.time_since_startup).as_secs_f32());
+    }
+}

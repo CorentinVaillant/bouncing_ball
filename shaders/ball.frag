@@ -17,7 +17,7 @@ out vec4 fragColor;
 
 void main() {
   if (length(position-gl_FragCoord.xy) <=(radius-1.)){
-    fragColor = vec4(position.x/resolution.x,position.y/resolution.y,0.,1.);
+    fragColor = vec4(color.xyz,1.);
     gl_FragDepth = z;
   
   }else if (length(position-gl_FragCoord.xy) <=(radius)){

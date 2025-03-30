@@ -1,7 +1,7 @@
 use glium::uniforms::DynamicUniforms;
 
 use crate::{
-    ball::Ball,
+    one_ball::Ball,
     canvas::CanvasData,
     traits::CanvasDrawable,
 };
@@ -34,62 +34,63 @@ impl CanvasDrawable for Balls {
         self.z
     }
 
-    fn is_absolute_coord_in(&self, coord: (f32, f32)) -> bool {
-        for elem in &self.balls {
-            if elem.is_absolute_coord_in(coord) {
-                return true;
-            }
-        }
-        false
+    fn is_absolute_coord_in(&self, _coord: (f32, f32)) -> bool {
+        true
+        // for elem in &self.balls {
+        //     if elem.is_absolute_coord_in(coord) {
+        //         return true;
+        //     }
+        // }
+        // false
     }
 
-    fn is_relative_coord_in(&self, coord: (f32, f32)) -> bool {
-        for elem in &self.balls {
-            if elem.is_relative_coord_in(coord) {
-                return true;
-            }
-        }
-        false
+    fn is_relative_coord_in(&self, _coord: (f32, f32)) -> bool {
+        true
+        // for elem in &self.balls {
+        //     if elem.is_relative_coord_in(coord) {
+        //         return true;
+        //     }
+        // }
+        // false
     }
 
     fn update(&mut self, canva_info: &CanvasData, dt: f32) {
-        const PHYSIC_SUB_STEP: u16 = 1;
+        const PHYSIC_SUB_STEP: u16 = 20;
         let balls = &mut self.balls;
 
         for i_ball in 0..balls.len() {
             if balls[i_ball].do_physics {
-                // Reset forces
 
                 let mut ball = balls[i_ball].clone();
                 // Compute forces
-                ball.acc = [0.; 2];
-
+                
+                
                 let dt = dt / f32::from(PHYSIC_SUB_STEP);
+                
                 for _ in 0..PHYSIC_SUB_STEP {
+                    ball.acc = [0.; 2];
+
                     let (b_x, b_y): (f32, f32) = (
                         canva_info.size.0 * canva_info.window_resolution.0 as f32,
                         canva_info.size.1 * canva_info.window_resolution.1 as f32,
                     );
+                    // Reset forces
                     ball.handle_gravity_ball();
                     ball.handle_border_colision_ball((b_x, b_y));
 
+
                     for j_ball in 0..balls.len() {
                         if j_ball != i_ball {
-                            if ball.position == balls[j_ball].position {
-                                println!("hmmm");
-                            }
-                            ball.handle_collision_balls(&mut balls[j_ball]);
+                            ball.handle_collision_balls(&mut balls[j_ball],dt);
                         }
                     }
+
                     ball.apply_acceleration(dt);
                     ball.apply_friction(dt);
                     ball.apply_speed(dt);
                 }
 
-                let force_magnitude = (ball.acc[0].powi(2) + ball.acc[1].powi(2)).sqrt();
-                let max_force = 500.0;
-                let color_intensity = (force_magnitude / max_force).clamp(0.0, 1.0);
-                balls[i_ball].color = [color_intensity, 0.1, 1.0 - color_intensity];
+                ball.handle_color();
 
                 balls[i_ball] = ball;
             }
@@ -97,10 +98,17 @@ impl CanvasDrawable for Balls {
     }
 
     fn on_click(&mut self, coord: (f32, f32)) {
+        let mut clicking_on_ball = false;
         for elem in &mut self.balls {
             if elem.is_absolute_coord_in(coord) {
                 elem.on_click(coord);
+                clicking_on_ball = true;
+                println!("clicking on ball");
             }
+        }
+        if !clicking_on_ball{
+            println!("adding ball at :{coord:?}");
+            self.balls.push(Ball::new(20., coord.into()));
         }
     }
 
