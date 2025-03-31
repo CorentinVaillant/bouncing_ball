@@ -66,7 +66,8 @@ impl Drawable for Canvas {
         let (vert_buff, ind_buff) = self.get_vert_buff(facade).unwrap();
 
         let mut param = DrawParameters::default();
-        param.depth.test = DepthTest::IfMoreOrEqual;
+        // param.depth.test = DepthTest::IfMoreOrEqual;
+        param.depth.test = DepthTest::IfMore;
 
         for elem in &self.elements {
             let mut uniforms = elem.canvas_uniforms();

@@ -21,6 +21,7 @@ mod canvas;
 mod constants;
 mod traits;
 mod vertex;
+mod quadtree;
 
 fn main() {
     let event_loop = EventLoop::new().unwrap();
@@ -34,9 +35,9 @@ fn main() {
 
     let mut canva = Canvas::new((0., 0.), program);
 
-    let balls = (0..150)
+    let balls = (0..250)
       .map(|i|{let i = i as f32; 
-        Ball::new(i.sin().abs() * 20., [i*20. % window.inner_size().width as f32,i*20. % window.inner_size().height as f32])})
+        Ball::new(i.sin().abs() * 20.+5., [i*20. % window.inner_size().width as f32,i*20. % window.inner_size().height as f32])})
       .collect();
 
     canva.push_elem(Box::new(Balls {
