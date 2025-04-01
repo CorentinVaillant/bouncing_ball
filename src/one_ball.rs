@@ -22,7 +22,7 @@ pub struct Ball {
     pub position: [f32; 2],
     pub speed: [f32; 2],
     pub acc: [f32; 2],
-    pub compression:f32,
+    pub compression: f32,
 
     pub do_physics: bool,
     pub mass: f32,
@@ -40,7 +40,7 @@ impl Ball {
             position: pos,
             speed: [0.; 2],
             acc: [0.; 2],
-            compression:0.,
+            compression: 0.,
 
             do_physics: true,
             mass: size / 2.,
@@ -202,78 +202,74 @@ impl Ball {
     pub fn handle_collision_balls(&mut self, other: &mut Ball, dt: f32) {
         let dx = other.position[0] - self.position[0];
         let dy = other.position[1] - self.position[1];
-    
+
         let dist_sq = dx * dx + dy * dy;
         let min_dist_sq = (self.size + other.size) * (self.size + other.size);
 
-    
         if dist_sq < min_dist_sq {
             let dist = dist_sq.sqrt();
             let nx = dx / dist;
             let ny = dy / dist;
-    
+
             let overlap = (self.size + other.size) - dist;
             let correction_factor = 1.;
-    
+
             // Correct positions
             self.position[0] -= nx * overlap * correction_factor;
             self.position[1] -= ny * overlap * correction_factor;
-    
+
             other.position[0] += nx * overlap * correction_factor;
             other.position[1] += ny * overlap * correction_factor;
-    
+
             // Relative velocity along the normal
             let vx = self.speed[0] - other.speed[0];
             let vy = self.speed[1] - other.speed[1];
             let vel_along_normal = vx * nx + vy * ny;
-    
+
             // // If moving apart, no need to apply impulse
             // if vel_along_normal > 0. {
             //     return;
             // }
-    
-            
+
             let restitution = self.bounce.min(other.bounce);
-            
+
             let inv_mass1 = self.mass.recip();
             let inv_mass2 = other.mass.recip();
 
             let impulse_scalar = -(1. + restitution) * vel_along_normal / (inv_mass1 + inv_mass2);
-    
+
             let impulse_x = impulse_scalar * nx;
             let impulse_y = impulse_scalar * ny;
-    
+
             // Calculate the change in velocity due to the impulse
             let impulse_velocity1 = [impulse_x * inv_mass1, impulse_y * inv_mass1];
             let impulse_velocity2 = [impulse_x * inv_mass2, impulse_y * inv_mass2];
-    
+
             // Update acceleration based on the change in velocity
             self.acc[0] += impulse_velocity1[0] / dt;
             self.acc[1] += impulse_velocity1[1] / dt;
 
-            
-    
             other.acc[0] += impulse_velocity2[0] / dt;
             other.acc[1] += impulse_velocity2[1] / dt;
         }
     }
-    
+
     pub fn apply_friction(&mut self, dt: f32) {
         self.speed[0] *= 1. - FRICTION_COEF * dt;
         self.speed[1] *= 1. - FRICTION_COEF * dt;
     }
-    
+
     pub fn apply_speed(&mut self, dt: f32) {
         self.position[0] += self.speed[0] * dt;
         self.position[1] += self.speed[1] * dt;
     }
-    
-    pub fn handle_color(&mut self){
+
+    pub fn handle_color(&mut self) {
         let force_magnitude = (self.acc[0].powi(2) + self.acc[1].powi(2)).sqrt() * self.mass;
         let flat_fac = 100.;
         let trans_fac = 10.;
-        let f = trans_fac-force_magnitude/flat_fac;
-        let color_intensity = (f+1.).recip();
+        let f = trans_fac - force_magnitude / flat_fac;
+        let color_intensity = (f + 1.).recip();
         self.color = [color_intensity, 0., 1.0 - color_intensity];
     }
 }

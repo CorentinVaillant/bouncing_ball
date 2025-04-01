@@ -1,10 +1,6 @@
 use glium::uniforms::DynamicUniforms;
 
-use crate::{
-    one_ball::Ball,
-    canvas::CanvasData,
-    traits::CanvasDrawable,
-};
+use crate::{canvas::CanvasData, one_ball::Ball, traits::CanvasDrawable};
 
 pub struct Balls {
     pub balls: Vec<Ball>,
@@ -60,13 +56,11 @@ impl CanvasDrawable for Balls {
 
         for i_ball in 0..balls.len() {
             if balls[i_ball].do_physics {
-
                 let mut ball = balls[i_ball].clone();
                 // Compute forces
-                
-                
+
                 let dt = dt / f32::from(PHYSIC_SUB_STEP);
-                
+
                 for _ in 0..PHYSIC_SUB_STEP {
                     ball.acc = [0.; 2];
 
@@ -78,10 +72,9 @@ impl CanvasDrawable for Balls {
                     ball.handle_gravity_ball();
                     ball.handle_border_colision_ball((b_x, b_y));
 
-
                     for j_ball in 0..balls.len() {
                         if j_ball != i_ball {
-                            ball.handle_collision_balls(&mut balls[j_ball],dt);
+                            ball.handle_collision_balls(&mut balls[j_ball], dt);
                         }
                     }
 
@@ -106,7 +99,7 @@ impl CanvasDrawable for Balls {
                 println!("clicking on ball");
             }
         }
-        if !clicking_on_ball{
+        if !clicking_on_ball {
             println!("adding ball at :{coord:?}");
             self.balls.push(Ball::new(20., coord.into()));
         }
@@ -138,4 +131,3 @@ impl CanvasDrawable for Balls {
         }
     }
 }
-
