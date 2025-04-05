@@ -1,3 +1,3 @@
 pub const FRICTION_COEF: f32 = 0.001;
 pub const GRAVITY_CONST: f32 = 9.80665;
-pub const MOUSE_ACCELERATION_FACTOR: f32 = 10.;
+pub const MOUSE_ACCELERATION_FACTOR: f32 = 20.;

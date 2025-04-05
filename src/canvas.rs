@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use std::{cell::RefCell, rc::Rc};
 
 use glium::{
     DepthTest, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer, backend::Facade,
@@ -11,8 +10,6 @@ use crate::{
     traits::{self, CanvasDrawable, Drawable},
     vertex::Vertex,
 };
-
-pub type CanvaRef = Rc<RefCell<Canvas>>;
 
 pub struct Canvas {
     pub data: CanvasData,
@@ -71,8 +68,10 @@ impl Drawable for Canvas {
 
         for elem in &self.elements {
             let mut uniforms = elem.canvas_uniforms();
+            let dimension = target.get_dimensions();
 
             for uni in &mut uniforms {
+                uni.add("resolution", &dimension);
                 uni.add("canva_z", &self.z);
                 uni.add("canva_pos", &self.data.position);
                 uni.add("canva_size", &self.data.size);
@@ -162,6 +161,7 @@ impl CanvasDrawable for Canvas {
     }
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug)]
 pub enum CanvaToVertBuffErr {
     VertexBufferCreationError(glium::vertex::BufferCreationError),

@@ -13,6 +13,7 @@ use glium::{
     },
 };
 use one_ball::Ball;
+use quadtree::AABB;
 use traits::{CanvasDrawable, Drawable};
 
 mod balls;
@@ -23,32 +24,35 @@ mod quadtree;
 mod traits;
 mod vertex;
 
+#[cfg(debug_assertions)]
+mod quadtree_test;
+
 fn main() {
     let event_loop = EventLoop::new().unwrap();
     let (window, display) = backend::glutin::SimpleWindowBuilder::new()
         .with_title("Bouncing ball !")
         .build(&event_loop);
 
-    let frag_shad = std::fs::read_to_string("./shaders/ball.frag").unwrap();
-    let vert_shad = std::fs::read_to_string("./shaders/ball.vert").unwrap();
+    let frag_shad =
+        std::fs::read_to_string("./shaders/ball.frag").expect("could not load ./shaders/ball.frag");
+    let vert_shad = std::fs::read_to_string("./shaders/canva.vert")
+        .expect("could not load ./shaders/ball.vert");
     let program = Program::from_source(&display, &vert_shad, &frag_shad, None).unwrap();
 
     let mut canva = Canvas::new((0., 0.), program);
 
-    let balls = (0..250)
-        .map(|i| {
-            let i = i as f32;
-            Ball::new(
-                i.sin().abs() * 20. + 5.,
-                [
-                    i * 20. % window.inner_size().width as f32,
-                    i * 20. % window.inner_size().height as f32,
-                ],
-            )
-        })
-        .collect();
+    let (b_x, b_y): (f32, f32) = (
+        window.inner_size().width as f32,
+        window.inner_size().height as f32,
+    );
 
-    canva.push_elem(Box::new(Balls { balls, z: 0. }));
+    let balls = vec![Ball::new(50., [b_x / 2., b_y / 2.])];
+
+    println!("window dimension :{b_x},{b_y}");
+
+    let boundary = AABB::new((b_x / 2., b_y / 2.), b_x.max(b_y));
+    canva.push_elem(Box::new(Balls::new(boundary, balls)));
+    // canva.push_elem(Box::new(Ball::new(50., [0.,0.])));
 
     let mut app = App {
         main_canva: canva,
@@ -135,10 +139,8 @@ impl ApplicationHandler for App {
             } => {
                 let new_pos = position.into();
                 //draging
-                if self.mouse_cliking {
-                    if self.main_canva.is_absolute_coord_in(self.mouse_position) {
-                        self.main_canva.on_drag(self.mouse_position.into(), new_pos);
-                    }
+                if self.mouse_cliking && self.main_canva.is_absolute_coord_in(self.mouse_position) {
+                    self.main_canva.on_drag(self.mouse_position.into(), new_pos);
                 }
 
                 self.mouse_position = new_pos.into();

@@ -1,12 +1,11 @@
 // #![allow(dead_code, unused_variables)]
 
-const PHYSIC_SUB_STEP: u16 = 10;
-
 use glium::dynamic_uniform;
 
 use crate::{
     canvas::CanvasData,
     constants::{FRICTION_COEF, GRAVITY_CONST, MOUSE_ACCELERATION_FACTOR},
+    quadtree::As2dPoint,
     traits::CanvasDrawable,
 };
 
@@ -59,71 +58,29 @@ impl CanvasDrawable for Ball {
     }
 
     fn update(&mut self, canva_info: &CanvasData, dt: f32) {
-        let [x, y] = &mut self.position;
-        let [s_x, s_y] = &mut self.speed;
-        let [a_x, a_y] = &mut self.acc;
+        if !self.do_physics {
+            return;
+        }
 
-        if self.do_physics {
-            let dt = dt / f32::from(PHYSIC_SUB_STEP);
-            for _ in 0..PHYSIC_SUB_STEP {
-                // Reset forces
-                *a_x = 0.0;
-                *a_y = 0.0;
+        const PHYSIC_SUB_STEP: u16 = 20;
+        let sub_dt = dt / f32::from(PHYSIC_SUB_STEP);
 
-                // Compute forces
+        let border: (f32, f32) = (
+            canva_info.size.0 * canva_info.window_resolution.0 as f32,
+            canva_info.size.1 * canva_info.window_resolution.1 as f32,
+        );
 
-                let (b_x, b_y): (f32, f32) = (
-                    canva_info.size.0 * canva_info.window_resolution.0 as f32,
-                    canva_info.size.1 * canva_info.window_resolution.1 as f32,
-                );
+        for _ in 0..PHYSIC_SUB_STEP {
+            self.reset_force();
+            self.handle_gravity();
+            self.handle_border_colision_ball(border);
 
-                //Gravity
-                *a_y -= GRAVITY_CONST * self.mass;
-
-                // //Spring like bounce
-                // if *x < self.size || (*x - b_x).abs() < self.size {
-                //     *a_x += -(*x - (b_x / 2.0)) * (self.size / 2.0) * self.bounce;
-                // }
-                // if *y < self.size || (*y - b_y).abs() < self.size {
-                //     *a_y += -(*y - (b_y / 2.0)) * (self.size / 2.0) * self.bounce;
-                // }
-
-                // Bounding box
-                if *x < self.size {
-                    *x = self.size; // prevent sticking
-                    *s_x = -*s_x * self.bounce;
-                } else if *x > b_x - self.size {
-                    *x = b_x - self.size; // prevent sticking
-                    *s_x = -*s_x * self.bounce;
-                }
-
-                if *y < self.size {
-                    *y = self.size; // prevent sticking
-                    *s_y = -*s_y * self.bounce;
-                } else if *y > b_y - self.size {
-                    *y = b_y - self.size; // prevent sticking
-                    *s_y = -*s_y * self.bounce;
-                }
-
-                // Apply acceleration
-                *s_x += *a_x * dt;
-                *s_y += *a_y * dt;
-
-                // Apply friction
-                *s_x *= 1. - FRICTION_COEF * dt;
-                *s_y *= 1. - FRICTION_COEF * dt;
-
-                *x += *s_x * dt;
-                *y += *s_y * dt;
-            }
-
-            let force_magnitude = (a_x.powi(2) + a_y.powi(2)).sqrt();
-            let max_force = 500.0;
-            let color_intensity = (force_magnitude / max_force).clamp(0.0, 1.0);
-            self.color = [color_intensity, 0.1, 1.0 - color_intensity];
+            self.apply_acceleration(sub_dt);
+            self.apply_friction(sub_dt);
+            self.apply_speed(sub_dt);
+            self.handle_color();
         }
     }
-
     fn canvas_uniforms(&self) -> Vec<glium::uniforms::DynamicUniforms> {
         vec![dynamic_uniform! {
             position:&self.position,
@@ -165,13 +122,17 @@ impl CanvasDrawable for Ball {
 //-----------
 
 impl Ball {
+    pub fn reset_force(&mut self) {
+        self.acc = [0.; 2];
+    }
+
     pub fn apply_acceleration(&mut self, dt: f32) {
         self.speed[0] += self.acc[0] * dt;
         self.speed[1] += self.acc[1] * dt;
     }
 
-    pub fn handle_gravity_ball(&mut self) {
-        self.acc[1] -= GRAVITY_CONST * self.mass;
+    pub fn handle_gravity(&mut self) {
+        self.acc[1] += GRAVITY_CONST * self.mass;
         self.compression += GRAVITY_CONST * self.mass;
     }
 
@@ -195,16 +156,27 @@ impl Ball {
             *s_y *= -bounce;
         } else if *y > b_y - size {
             *y = b_y - size; // prevent sticking
-            *s_y = -bounce;
+            *s_y *= -bounce;
         }
     }
 
     pub fn handle_collision_balls(&mut self, other: &mut Ball, dt: f32) {
+
+        // println!("1. \t => handling collision betwenn {:?} and {:?}", self as *const Self, other as *const Self);
+
+        if !self.do_physics || !other.do_physics {
+            return;
+        }
+
         let dx = other.position[0] - self.position[0];
         let dy = other.position[1] - self.position[1];
 
-        let dist_sq = dx * dx + dy * dy;
+        let mut dist_sq = dx * dx + dy * dy;
         let min_dist_sq = (self.size + other.size) * (self.size + other.size);
+
+        if dist_sq < f32::EPSILON {  // Better than == 0.0 check
+            dist_sq = f32::EPSILON;
+        }
 
         if dist_sq < min_dist_sq {
             let dist = dist_sq.sqrt();
@@ -225,11 +197,6 @@ impl Ball {
             let vx = self.speed[0] - other.speed[0];
             let vy = self.speed[1] - other.speed[1];
             let vel_along_normal = vx * nx + vy * ny;
-
-            // // If moving apart, no need to apply impulse
-            // if vel_along_normal > 0. {
-            //     return;
-            // }
 
             let restitution = self.bounce.min(other.bounce);
 
@@ -252,6 +219,7 @@ impl Ball {
             other.acc[0] += impulse_velocity2[0] / dt;
             other.acc[1] += impulse_velocity2[1] / dt;
         }
+
     }
 
     pub fn apply_friction(&mut self, dt: f32) {
@@ -271,5 +239,22 @@ impl Ball {
         let f = trans_fac - force_magnitude / flat_fac;
         let color_intensity = (f + 1.).recip();
         self.color = [color_intensity, 0., 1.0 - color_intensity];
+    }
+}
+
+impl As2dPoint for Ball {
+    #[inline]
+    fn x(&self) -> f32 {
+        self.position[0]
+    }
+
+    #[inline]
+    fn y(&self) -> f32 {
+        self.position[1]
+    }
+
+    #[inline]
+    fn set_pos(&mut self, pos: (f32, f32)) {
+        self.position = pos.into();
     }
 }

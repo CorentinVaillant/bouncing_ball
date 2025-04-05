@@ -51,7 +51,7 @@ impl<T: CanvasDrawable> CanvasDrawable for Vec<T> {
     }
 
     fn get_z(&self) -> f32 {
-        self.get(0).map(CanvasDrawable::get_z).unwrap_or(0.)
+        self.first().map(CanvasDrawable::get_z).unwrap_or(0.)
     }
 
     fn canvas_uniforms(&self) -> Vec<DynamicUniforms> {
