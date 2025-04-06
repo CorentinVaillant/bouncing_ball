@@ -1,10 +1,13 @@
 // #![allow(dead_code, unused_variables)]
 
+use core::f32;
+
 use glium::dynamic_uniform;
+use my_rust_matrix_lib::my_matrix_lib::prelude::{EuclidianSpace, VectorSpace};
 
 use crate::{
     canvas::CanvasData,
-    constants::{FRICTION_COEF, GRAVITY_CONST, MOUSE_ACCELERATION_FACTOR},
+    constants::{Vec2, FRICTION_COEF, GRAVITY_CONST, LIGHT_SPEED, MOUSE_ACCELERATION_FACTOR},
     quadtree::As2dPoint,
     traits::CanvasDrawable,
 };
@@ -17,10 +20,13 @@ pub struct Ball {
     pub color: Color,
 
     pub z: f32,
+    pub id :usize,
 
-    pub position: [f32; 2],
-    pub speed: [f32; 2],
-    pub acc: [f32; 2],
+    pub coliding_pos : Vec2,
+
+    pub position: Vec2,
+    pub speed: Vec2,
+    pub acc: Vec2,
     pub compression: f32,
 
     pub do_physics: bool,
@@ -29,21 +35,25 @@ pub struct Ball {
 }
 
 impl Ball {
-    pub fn new(size: f32, pos: [f32; 2]) -> Self {
+    pub fn new(size: f32, pos: [f32; 2],id:usize) -> Self {
+        debug_assert!(!(pos[0].is_nan() || pos[1].is_nan()));
+
         Self {
             size,
             color: [1.; 3],
 
             z: 1.,
+            id,
 
-            position: pos,
-            speed: [0.; 2],
-            acc: [0.; 2],
+            coliding_pos: pos.into(),
+            position: pos.into(),
+            speed: [0.; 2].into(),
+            acc: [0.; 2].into(),
             compression: 0.,
 
             do_physics: true,
-            mass: size / 2.,
-            bounce: 0.30,
+            mass: size * size,
+            bounce: 0.3,
         }
     }
 }
@@ -76,16 +86,18 @@ impl CanvasDrawable for Ball {
             self.handle_border_colision_ball(border);
 
             self.apply_acceleration(sub_dt);
-            self.apply_friction(sub_dt);
+            self.handle_friction();
             self.apply_speed(sub_dt);
             self.handle_color();
         }
     }
     fn canvas_uniforms(&self) -> Vec<glium::uniforms::DynamicUniforms> {
         vec![dynamic_uniform! {
-            position:&self.position,
+            position:self.position.as_array(),
             radius: &self.size,
             color:&self.color,
+            collision_pos:self.coliding_pos.as_array(),
+
             z:&self.z,
         }]
     }
@@ -93,6 +105,9 @@ impl CanvasDrawable for Ball {
     fn on_click(&mut self, _: (f32, f32)) {
         self.do_physics = false;
         self.color = [0.2, 1., 0.2];
+
+        self.speed = Vec2::v_space_zero();
+        self.acc = Vec2::v_space_zero();
     }
 
     fn on_click_release(&mut self) {
@@ -101,12 +116,9 @@ impl CanvasDrawable for Ball {
 
     fn on_drag(&mut self, old_pos: [f32; 2], new_pos: [f32; 2]) {
         self.do_physics = false;
-        self.position = new_pos;
-        self.speed = [new_pos[0] - old_pos[0], new_pos[1] - old_pos[1]];
-        self.speed = [
-            self.speed[0] * MOUSE_ACCELERATION_FACTOR,
-            self.speed[1] * MOUSE_ACCELERATION_FACTOR,
-        ];
+        self.position = new_pos.into();
+        self.speed = [new_pos[0] - old_pos[0], new_pos[1] - old_pos[1]].into();
+        self.speed *= MOUSE_ACCELERATION_FACTOR;
     }
 
     fn is_absolute_coord_in(&self, coord: (f32, f32)) -> bool {
@@ -122,30 +134,17 @@ impl CanvasDrawable for Ball {
 //-----------
 
 impl Ball {
-    pub fn reset_force(&mut self) {
-        self.acc = [0.; 2];
-    }
-
-    pub fn apply_acceleration(&mut self, dt: f32) {
-        self.speed[0] += self.acc[0] * dt;
-        self.speed[1] += self.acc[1] * dt;
-    }
-
-    pub fn handle_gravity(&mut self) {
-        self.acc[1] += GRAVITY_CONST * self.mass;
-        self.compression += GRAVITY_CONST * self.mass;
-    }
 
     pub fn handle_border_colision_ball(&mut self, (b_x, b_y): (f32, f32)) {
-        let [x, y] = &mut self.position;
-        let [s_x, s_y] = &mut self.speed;
+        let [x, y] = &mut self.position.as_mut_array();
+        let [s_x, s_y] = &mut self.speed.as_mut_array();
         let size = self.size;
         let bounce = self.bounce;
 
         // Bounding box
         if *x < size {
             *x = size; // prevent sticking
-            *s_x *= -bounce;
+            *s_x *= -bounce*bounce;
         } else if *x > b_x - size {
             *x = b_x - size; // prevent sticking
             *s_x *= -bounce;
@@ -153,78 +152,92 @@ impl Ball {
 
         if *y < size {
             *y = size; // prevent sticking
-            *s_y *= -bounce;
+            *s_y *= -bounce*bounce;
         } else if *y > b_y - size {
             *y = b_y - size; // prevent sticking
-            *s_y *= -bounce;
-        }
-    }
-
-    pub fn handle_collision_balls(&mut self, other: &mut Ball, dt: f32) {
-
-        // println!("1. \t => handling collision betwenn {:?} and {:?}", self as *const Self, other as *const Self);
-
-        if !self.do_physics || !other.do_physics {
-            return;
+            *s_y *= -bounce*bounce;
         }
 
-        let dx = other.position[0] - self.position[0];
-        let dy = other.position[1] - self.position[1];
-
-        let mut dist_sq = dx * dx + dy * dy;
-        let min_dist_sq = (self.size + other.size) * (self.size + other.size);
-
-        if dist_sq < f32::EPSILON {  // Better than == 0.0 check
-            dist_sq = f32::EPSILON;
-        }
-
-        if dist_sq < min_dist_sq {
-            let dist = dist_sq.sqrt();
-            let nx = dx / dist;
-            let ny = dy / dist;
-
-            let overlap = (self.size + other.size) - dist;
-            let correction_factor = 1.;
-
-            // Correct positions
-            self.position[0] -= nx * overlap * correction_factor;
-            self.position[1] -= ny * overlap * correction_factor;
-
-            other.position[0] += nx * overlap * correction_factor;
-            other.position[1] += ny * overlap * correction_factor;
-
-            // Relative velocity along the normal
-            let vx = self.speed[0] - other.speed[0];
-            let vy = self.speed[1] - other.speed[1];
-            let vel_along_normal = vx * nx + vy * ny;
-
-            let restitution = self.bounce.min(other.bounce);
-
-            let inv_mass1 = self.mass.recip();
-            let inv_mass2 = other.mass.recip();
-
-            let impulse_scalar = -(1. + restitution) * vel_along_normal / (inv_mass1 + inv_mass2);
-
-            let impulse_x = impulse_scalar * nx;
-            let impulse_y = impulse_scalar * ny;
-
-            // Calculate the change in velocity due to the impulse
-            let impulse_velocity1 = [impulse_x * inv_mass1, impulse_y * inv_mass1];
-            let impulse_velocity2 = [impulse_x * inv_mass2, impulse_y * inv_mass2];
-
-            // Update acceleration based on the change in velocity
-            self.acc[0] += impulse_velocity1[0] / dt;
-            self.acc[1] += impulse_velocity1[1] / dt;
-
-            other.acc[0] += impulse_velocity2[0] / dt;
-            other.acc[1] += impulse_velocity2[1] / dt;
-        }
 
     }
 
-    pub fn apply_friction(&mut self, dt: f32) {
-        self.speed[0] *= 1. - FRICTION_COEF * dt;
-        self.speed[1] *= 1. - FRICTION_COEF * dt;
+    pub fn is_overlapping(&self, other: &Self) -> bool {
+        (self.position[0] - other.position[0]) * (self.position[0] - other.position[0])
+            + (self.position[1] - other.position[1]) * (self.position[1] - other.position[1])
+            <= (self.size + other.size) * (self.size + other.size)
+    }
+
+    ///Handle collision between two balls.
+    /// this video has been very usefull to make the physics behind this :  
+    ///     -> https://www.youtube.com/watch?v=LPzyNOHY3A4
+    pub fn handle_collision_balls(&mut self, other: &mut Ball, _dt: f32) {
+        self.coliding_pos = other.position;
+        other.coliding_pos= self.position;
+
+
+        //does balls collides :
+        if self.is_overlapping(other) {
+
+
+            //static collision :
+
+            //compute distance and overlap factor between balls
+            let dist = self.position.distance(other.position).max(0.0001);
+            let overlap = 0.5 * (dist - self.size - other.size);
+
+            //resolve overlap 
+            let s_delta_pos= -(self.position - other.position) * overlap / dist;
+            let o_delta_pos = (self.position - other.position) * overlap / dist;
+
+            //dynamic response using impulse (see: https://en.wikipedia.org/wiki/Inelastic_collision)
+
+            //inelastic collision :
+            let bounce = self.bounce.min(other.bounce);
+            let norm_p: Vec2 = (self.position - other.position) / dist; //normal vector
+
+            let mut s_delta_speed = Vec2::v_space_zero();
+            let mut o_delta_speed = Vec2::v_space_zero();
+
+            let rel_vel = (other.speed - self.speed).dot(norm_p);
+            if rel_vel <0.{
+                let norm_impulse =(1.+bounce)*(self.mass * other.mass) / ((self.mass + other.mass) * (other.speed - self.speed).dot(norm_p)).max(f32::EPSILON); 
+
+                s_delta_speed  = norm_p * norm_impulse/self.mass.max(f32::EPSILON);
+                o_delta_speed = -norm_p * norm_impulse/other.mass.max(f32::EPSILON);
+            }
+            
+
+            //applying new pos and speed
+
+            self.speed += s_delta_speed;
+            self.position += s_delta_pos;
+
+            other.speed += o_delta_speed;
+            other.position += o_delta_pos;
+
+        }
+    }
+
+    pub fn reset_force(&mut self) {
+        self.coliding_pos = self.position;
+        self.acc = Vec2::v_space_zero();
+    }
+
+    pub fn apply_acceleration(&mut self, dt: f32) {
+        self.speed[0] += self.acc[0] * dt;
+        self.speed[1] += self.acc[1] * dt;
+
+        self.speed[0] =  self.speed[0].clamp(-LIGHT_SPEED, LIGHT_SPEED);
+        self.speed[1] =  self.speed[1].clamp(-LIGHT_SPEED, LIGHT_SPEED);
+    }
+
+    pub fn handle_gravity(&mut self) {
+        self.acc[1] += GRAVITY_CONST * self.mass;
+        self.compression += GRAVITY_CONST * self.mass;
+    }
+
+    pub fn handle_friction(&mut self) {
+        self.acc -= self.speed * FRICTION_COEF;
     }
 
     pub fn apply_speed(&mut self, dt: f32) {
@@ -233,12 +246,8 @@ impl Ball {
     }
 
     pub fn handle_color(&mut self) {
-        let force_magnitude = (self.acc[0].powi(2) + self.acc[1].powi(2)).sqrt() * self.mass;
-        let flat_fac = 100.;
-        let trans_fac = 10.;
-        let f = trans_fac - force_magnitude / flat_fac;
-        let color_intensity = (f + 1.).recip();
-        self.color = [color_intensity, 0., 1.0 - color_intensity];
+        // let f = f32::sin(self.id as f32 * f32::consts::FRAC_PI_2 ).abs();
+        self.color = hue_to_rgb(self.id as f32 * 4.*f32::consts::FRAC_PI_2 / 32.);
     }
 }
 
@@ -255,6 +264,23 @@ impl As2dPoint for Ball {
 
     #[inline]
     fn set_pos(&mut self, pos: (f32, f32)) {
-        self.position = pos.into();
+        self.position = [pos.0, pos.1].into();
+    }
+}
+
+fn hue_to_rgb(h: f32) -> [f32;3] {
+    let h = h % (2.*f32::consts::PI);
+    let c = 1.0;
+    let h_prime = h / (f32::consts::FRAC_PI_3);
+    let x = c * (1.0 - ((h_prime % 2.0) - 1.0).abs());
+
+    match h_prime as u32 {
+        0 => [c, x, 0.0],
+        1 => [x, c, 0.0],
+        2 => [0.0, c, x],
+        3 => [0.0, x, c],
+        4 => [x, 0.0, c],
+        5 => [c, 0.0, x],
+        _ => [1.0, 0.0, 0.0], // fallback (shouldn't happen)
     }
 }

@@ -75,12 +75,17 @@ mod tests {
     }
 
     #[test]
-    fn test_rebuild(){
-        let boundary = AABB::new((0.,0.), 100.);
+    fn test_rebuild() {
+        let boundary = AABB::new((0., 0.), 100.);
         let mut qtree: Quadtree<TestPoint, 3> = Quadtree::empty(boundary);
 
-        let points = vec![TestPoint { x: 4.0, y: 4.0 },TestPoint { x: 8.0, y: 4.0 },TestPoint { x: 10.0, y: 5.0 },TestPoint { x: 25.0, y: -1.0 },];
-        for p in points{
+        let points = vec![
+            TestPoint { x: 4.0, y: 4.0 },
+            TestPoint { x: 8.0, y: 4.0 },
+            TestPoint { x: 10.0, y: 5.0 },
+            TestPoint { x: 25.0, y: -1.0 },
+        ];
+        for p in points {
             qtree.insert(p).unwrap();
         }
     }

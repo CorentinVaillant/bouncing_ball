@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-
 use glium::{
     DepthTest, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer, backend::Facade,
     dynamic_uniform, index::PrimitiveType,

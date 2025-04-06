@@ -1,5 +1,3 @@
-use core::f32;
-
 use balls::Balls;
 use canvas::{Canvas, CanvasData};
 use glium::{
@@ -9,6 +7,7 @@ use glium::{
         application::ApplicationHandler,
         event::{DeviceEvent, ElementState, MouseButton, WindowEvent},
         event_loop::{self, EventLoop},
+        keyboard,
         window::Window,
     },
 };
@@ -37,7 +36,8 @@ fn main() {
         std::fs::read_to_string("./shaders/ball.frag").expect("could not load ./shaders/ball.frag");
     let vert_shad = std::fs::read_to_string("./shaders/canva.vert")
         .expect("could not load ./shaders/ball.vert");
-    let program = Program::from_source(&display, &vert_shad, &frag_shad, None).unwrap();
+    let program = Program::from_source(&display, &vert_shad, &frag_shad, None)
+        .expect("could not compile shaders");
 
     let mut canva = Canvas::new((0., 0.), program);
 
@@ -46,13 +46,23 @@ fn main() {
         window.inner_size().height as f32,
     );
 
-    let balls = vec![Ball::new(50., [b_x / 2., b_y / 2.])];
+    let boundary = AABB::new((b_x / 2., b_y / 2.), b_x.max(b_y));
+    let mut balls = Balls::empty(boundary);
+
+    for i in 0..0 {
+        let i_f = i as f32;
+        let new_ball = Ball::new(
+            (i_f.sin().abs() + 1.) * 10.,
+            [
+                i_f * 20. % window.inner_size().width as f32,
+                i_f * 20. % window.inner_size().height as f32,
+            ],i
+        );
+        balls.push_ball(new_ball);
+    }
 
     println!("window dimension :{b_x},{b_y}");
-
-    let boundary = AABB::new((b_x / 2., b_y / 2.), b_x.max(b_y));
-    canva.push_elem(Box::new(Balls::new(boundary, balls)));
-    // canva.push_elem(Box::new(Ball::new(50., [0.,0.])));
+    canva.push_elem(Box::new(balls));
 
     let mut app = App {
         main_canva: canva,
@@ -60,8 +70,10 @@ fn main() {
         dt: 0.,
         time: std::time::Instant::now(),
         frame_nb_since_startup: 0,
-        time_since_startup: std::time::Instant::now(),
-
+        start_time: std::time::Instant::now(),
+        f_pressed_time: std::time::Instant::now(),
+        frame_nb_since_f: 0,
+        benching_fps: false,
         display,
         _window: window,
 
@@ -79,7 +91,10 @@ struct App {
     dt: f32,
     time: std::time::Instant,
     frame_nb_since_startup: u32,
-    time_since_startup: std::time::Instant,
+    start_time: std::time::Instant,
+    f_pressed_time: std::time::Instant,
+    frame_nb_since_f: u32,
+    benching_fps: bool,
 
     display: Display<WindowSurface>,
     _window: Window,
@@ -117,12 +132,14 @@ impl ApplicationHandler for App {
                 event,
                 is_synthetic: _,
             } => match event.physical_key {
-                glium::winit::keyboard::PhysicalKey::Code(key_code) => match key_code {
-                    glium::winit::keyboard::KeyCode::Escape => event_loop.exit(),
-                    glium::winit::keyboard::KeyCode::KeyF => self.print_fps(),
+                keyboard::PhysicalKey::Code(key_code) => match (event.state, key_code) {
+                    (ElementState::Pressed, keyboard::KeyCode::Escape) => event_loop.exit(),
+                    (ElementState::Pressed, keyboard::KeyCode::KeyF) => self.print_avg_fps(),
+                    (ElementState::Pressed, keyboard::KeyCode::KeyD) => self.starting_fps_bench(),
+                    (ElementState::Released, keyboard::KeyCode::KeyD) => self.ending_fps_bench(),
                     _ => (),
                 },
-                glium::winit::keyboard::PhysicalKey::Unidentified(_) => (),
+                keyboard::PhysicalKey::Unidentified(_) => (),
             },
 
             WindowEvent::Resized(new_size) => {
@@ -180,6 +197,7 @@ impl ApplicationHandler for App {
 
     fn exiting(&mut self, event_loop: &event_loop::ActiveEventLoop) {
         println!("exiting...");
+        self.print_avg_fps();
         event_loop.exit();
     }
 
@@ -202,6 +220,10 @@ impl ApplicationHandler for App {
 
                 //draw
                 self.draw();
+
+                if self.benching_fps {
+                    self.frame_nb_since_f += 1;
+                }
             }
             _ => (),
         }
@@ -216,14 +238,31 @@ const DUMMY_CANVA_INFO: CanvasData = CanvasData {
 };
 
 impl App {
-    fn print_fps(&self) {
+    fn print_avg_fps(&self) {
         println!(
             "average fps since startup :{}",
             self.frame_nb_since_startup as f32
-                / self
-                    .time
-                    .duration_since(self.time_since_startup)
-                    .as_secs_f32()
+                / self.time.duration_since(self.start_time).as_secs_f32()
         );
+    }
+
+    fn starting_fps_bench(&mut self) {
+        if self.benching_fps {
+            return;
+        }
+        self.benching_fps = true;
+        self.f_pressed_time = std::time::Instant::now();
+        println!("starting benching fps (release key to stop");
+    }
+
+    fn ending_fps_bench(&mut self) {
+        println!(
+            "average fps :{}",
+            self.frame_nb_since_f as f32
+                / self.time.duration_since(self.f_pressed_time).as_secs_f32()
+        );
+
+        self.benching_fps = false;
+        self.frame_nb_since_f = 0;
     }
 }

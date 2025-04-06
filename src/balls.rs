@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use core::f32;
+
 use glium::uniforms::DynamicUniforms;
 
 use crate::{
@@ -11,7 +13,9 @@ use crate::{
 
 pub struct Balls {
     pub boundary: AABB,
-    pub balls: Quadtree<Ball, 5>,
+    pub balls: Quadtree<Ball, 4>,
+
+    last_rebuild: usize,
 
     pub z: f32,
 }
@@ -21,6 +25,9 @@ impl Balls {
         Self {
             boundary,
             balls: Quadtree::empty(boundary),
+
+            last_rebuild: 0,
+
             z: 0.,
         }
     }
@@ -44,6 +51,9 @@ impl Balls {
         Self {
             boundary,
             balls: qtree,
+
+            last_rebuild: 0,
+
             z: 0.,
         }
     }
@@ -77,26 +87,14 @@ impl CanvasDrawable for Balls {
 
     fn is_absolute_coord_in(&self, _coord: (f32, f32)) -> bool {
         true
-        // for elem in &self.balls {
-        //     if elem.is_absolute_coord_in(coord) {
-        //         return true;
-        //     }
-        // }
-        // false
     }
 
     fn is_relative_coord_in(&self, _coord: (f32, f32)) -> bool {
         true
-        // for elem in &self.balls {
-        //     if elem.is_relative_coord_in(coord) {
-        //         return true;
-        //     }
-        // }
-        // false
     }
 
     fn update(&mut self, canva_info: &CanvasData, dt: f32) {
-        const PHYSIC_SUB_STEP: u16 = 10;
+        const PHYSIC_SUB_STEP: u16 = 5;
         let sub_dt = dt / f32::from(PHYSIC_SUB_STEP);
         let balls = &mut self.balls;
 
@@ -107,38 +105,45 @@ impl CanvasDrawable for Balls {
                 .min(canva_info.size.1 * canva_info.window_resolution.1 as f32),
         );
 
-        let range_map = |ball: &Ball| AABB::new(ball.position.into(), ball.size + 1.);
+        let range_mapping = |ball: &Ball| AABB::new((*ball.position.as_array()).into(), ball.size*1.5);
 
-        let update_ball = |ball: &mut Ball, other_ball: &mut Ball| {
+        let first_map = |ball: &mut Ball| {
+            if !ball.do_physics {
+                return;
+            }
+            ball.reset_force();
+            ball.handle_gravity();
+        };
+
+        let map_with_other = |ball: &mut Ball, other_ball: &mut Ball| {
             ball.handle_collision_balls(other_ball, sub_dt);
         };
 
+        let last_map = |ball: &mut Ball| {
+            if !ball.do_physics {
+                return;
+            }
+            ball.handle_border_colision_ball(border);
+            ball.handle_friction();
+
+            ball.apply_acceleration(sub_dt);
+            ball.apply_speed(sub_dt);
+        };
+
         for _ in 0..PHYSIC_SUB_STEP {
-
-            balls.iter_mut().for_each(|ball|{
-                if !ball.do_physics{return;}
-                ball.reset_force();
-                ball.handle_gravity();
-                ball.handle_border_colision_ball(border);
-            });
-            balls.map_with_elem_in_range(range_map, update_ball);
-            // println!("3. \t=> making the rest of the physics"); 
-
-            balls.iter_mut().for_each(|ball|{
-                if !ball.do_physics{return;}
-                ball.apply_acceleration(sub_dt);
-                ball.apply_friction(sub_dt);
-                ball.apply_speed(sub_dt);
-            });
-
+            balls.map_the_map_with_elem_in_range_then_map(
+                first_map,
+                range_mapping,
+                map_with_other,
+                last_map,
+            );
         }
 
-        balls.iter_mut().for_each(|ball|{
-            if ball.do_physics{
-            ball.handle_color();}
+        balls.iter_mut().for_each(|ball| {
+            if ball.do_physics {
+                ball.handle_color();
+            }
         });
-
-        balls.rebuild();
     }
 
     fn on_click(&mut self, coord: (f32, f32)) {
@@ -152,7 +157,7 @@ impl CanvasDrawable for Balls {
         }
         if !clicking_on_ball {
             println!("adding ball at :{coord:?}");
-            self.push_ball(Ball::new(20., coord.into()))
+            self.push_ball(Ball::new(10., coord.into(),self.balls.len()))
         }
     }
 
@@ -177,6 +182,11 @@ impl CanvasDrawable for Balls {
     }
 
     fn on_window_resized(&mut self, new_size: (u32, u32)) {
+        let (b_x, b_y) = (new_size.0 as f32, new_size.1 as f32);
+        let boundary = AABB::new((b_x / 2., b_y / 2.), b_x.max(b_y));
+
+        let _ = self.balls.change_bounds(boundary);
+
         for elem in self.balls.iter_mut() {
             elem.on_window_resized(new_size);
         }
