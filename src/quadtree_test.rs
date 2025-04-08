@@ -44,11 +44,6 @@ mod tests {
         fn y(&self) -> f32 {
             self.y
         }
-
-        fn set_pos(&mut self, pos: (f32, f32)) {
-            self.x = pos.0;
-            self.y = pos.1;
-        }
     }
 
     #[test]
@@ -86,6 +81,22 @@ mod tests {
             TestPoint { x: 25.0, y: -1.0 },
         ];
         for p in points {
+            qtree.insert(p).unwrap();
+        }
+    }
+
+    #[test]    
+    #[ignore]
+    fn test_lot_of_insert(){
+        // on my pc -> 11.39s
+        const POINT_NB :u32= 10_000_000;
+        let half_dim = POINT_NB as f32;
+
+        let boundary = AABB::new((0., 0.), half_dim +500.);
+        let mut qtree: Quadtree<TestPoint, 3> = Quadtree::empty(boundary);
+        for i in 0..POINT_NB{
+            let i_f =  half_dim - i as f32 / 2.;
+            let p = TestPoint{x:i_f,y:f32::sin(i as f32) * i_f};
             qtree.insert(p).unwrap();
         }
     }
