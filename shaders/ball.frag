@@ -1,6 +1,7 @@
 #version 150
 
 uniform vec2 position;
+uniform vec2 velocity;
 uniform float radius;
 uniform vec3 color;
 uniform float z;
@@ -31,10 +32,18 @@ float line_segment(vec2 p,vec2 a, vec2 b,float thickness){
 
 void main() {
 
+  float speed = length(velocity);
+  vec2 last_pos = (position - velocity*speed );
+  vec2 inv_last_pos = vec2(last_pos.x,resolution.y - last_pos.y);
   vec2 inv_position = vec2(position.x,resolution.y - position.y);
   vec2 inv_collision = vec2(collision_pos.x,resolution.y - collision_pos.y);
 
 
+  if (line_segment(gl_FragCoord.xy,inv_position,inv_last_pos ,1.) != 1.){
+    fragColor = vec4(1.,0.2,0.2,0.8);
+
+    gl_FragDepth = z;
+  }
   if (line_segment(gl_FragCoord.xy,inv_position,inv_collision,1.) != 1.){
     fragColor = vec4(1.,1.,1.,1.);
     gl_FragDepth = z;

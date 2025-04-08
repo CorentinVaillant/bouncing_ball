@@ -7,7 +7,7 @@ use my_rust_matrix_lib::my_matrix_lib::prelude::{EuclidianSpace, VectorSpace};
 
 use crate::{
     canvas::CanvasData,
-    constants::{Vec2, FRICTION_COEF, GRAVITY_CONST, LIGHT_SPEED, MOUSE_ACCELERATION_FACTOR},
+    constants::{FRICTION_COEF, GRAVITY_CONST, LIGHT_SPEED, MOUSE_ACCELERATION_FACTOR, Vec2},
     quadtree::As2dPoint,
     traits::CanvasDrawable,
 };
@@ -20,9 +20,9 @@ pub struct Ball {
     pub color: Color,
 
     pub z: f32,
-    pub id :usize,
+    pub id: usize,
 
-    pub coliding_pos : Vec2,
+    pub coliding_pos: Vec2,
 
     pub position: Vec2,
     pub speed: Vec2,
@@ -35,7 +35,7 @@ pub struct Ball {
 }
 
 impl Ball {
-    pub fn new(size: f32, pos: [f32; 2],id:usize) -> Self {
+    pub fn new(size: f32, pos: [f32; 2], id: usize) -> Self {
         debug_assert!(!(pos[0].is_nan() || pos[1].is_nan()));
 
         Self {
@@ -94,6 +94,7 @@ impl CanvasDrawable for Ball {
     fn canvas_uniforms(&self) -> Vec<glium::uniforms::DynamicUniforms> {
         vec![dynamic_uniform! {
             position:self.position.as_array(),
+            speed: self.speed.as_array(),
             radius: &self.size,
             color:&self.color,
             collision_pos:self.coliding_pos.as_array(),
@@ -115,6 +116,7 @@ impl CanvasDrawable for Ball {
     }
 
     fn on_drag(&mut self, old_pos: [f32; 2], new_pos: [f32; 2]) {
+        self.coliding_pos = self.position;
         self.do_physics = false;
         self.position = new_pos.into();
         self.speed = [new_pos[0] - old_pos[0], new_pos[1] - old_pos[1]].into();
@@ -135,6 +137,8 @@ impl CanvasDrawable for Ball {
 
 impl Ball {
 
+    const PHYS_MIN_DIST :f32 = 0.00001;
+
     pub fn handle_border_colision_ball(&mut self, (b_x, b_y): (f32, f32)) {
         let [x, y] = &mut self.position.as_mut_array();
         let [s_x, s_y] = &mut self.speed.as_mut_array();
@@ -144,7 +148,7 @@ impl Ball {
         // Bounding box
         if *x < size {
             *x = size; // prevent sticking
-            *s_x *= -bounce*bounce;
+            *s_x *= -bounce;
         } else if *x > b_x - size {
             *x = b_x - size; // prevent sticking
             *s_x *= -bounce;
@@ -152,69 +156,96 @@ impl Ball {
 
         if *y < size {
             *y = size; // prevent sticking
-            *s_y *= -bounce*bounce;
+            *s_y *= -bounce;
         } else if *y > b_y - size {
             *y = b_y - size; // prevent sticking
-            *s_y *= -bounce*bounce;
+            *s_y *= -bounce;
         }
-
-
     }
 
     pub fn is_overlapping(&self, other: &Self) -> bool {
         (self.position[0] - other.position[0]) * (self.position[0] - other.position[0])
             + (self.position[1] - other.position[1]) * (self.position[1] - other.position[1])
-            <= (self.size + other.size) * (self.size + other.size)
+            < (self.size + other.size) * (self.size + other.size)
+    }
+
+    fn handle_static_collision(&mut self, other: &mut Self){
+        let dist = self.position.distance(other.position).max(Self::PHYS_MIN_DIST);
+
+        //1. compute distance and overlap factor between balls
+
+        let overlap = 0.5 * ((self.size + other.size) - dist).max(0.0);
+
+        //2. resolve overlap
+        self.position  += (self.position - other.position) * overlap / dist;
+        other.position -= (self.position - other.position) * overlap / dist;
+    }
+
+    #[allow(dead_code)]
+    fn handle_dynamic_collision_inelastic(&mut self, other:&mut Self){
+
+        const RESTITUTION_THRESHOLD: f32 = 0.5;
+
+        let bounce = (self.bounce + other.bounce) / 2.;
+
+        // 1. inelastic collision :
+    
+        let rel_speed = self.speed - other.speed;
+        let norm_p = (self.position - other.position) / self.position.distance(other.position).max(Self::PHYS_MIN_DIST);
+        let rel_vel_along_normal = rel_speed.dot(norm_p);
+
+        if rel_vel_along_normal > RESTITUTION_THRESHOLD {
+            return; 
+        }
+
+        let norm_p: Vec2 = (self.position - other.position) / self.position.distance(other.position).max(Self::PHYS_MIN_DIST);
+
+        let norm_impulse = rel_vel_along_normal
+            * ((self.mass * other.mass) / (self.mass + other.mass))
+            * (1.0 + bounce);
+
+        self.speed  -= norm_p * (norm_impulse / self.mass.max(f32::EPSILON));
+        other.speed += norm_p * (norm_impulse / other.mass.max(f32::EPSILON));
+        
+    }
+
+    #[allow(dead_code)]
+    fn handle_dynamic_collision_elastic(&mut self, other : &mut Self){
+
+        let norm_p = (self.position - other.position) / self.position.distance(other.position).max(Self::PHYS_MIN_DIST);
+        let tan_p : Vec2 = [-norm_p[0], norm_p[1]].into();
+
+        let dotprod_tan_self = self.speed.dot(tan_p);
+        let dotprod_tan_other = other.speed.dot(tan_p);
+        let dotprod_norm_self = self.speed.dot(norm_p);
+        let dotprod_norm_other = other.speed.dot(norm_p);
+
+
+        let m_self = (dotprod_norm_self * (self.mass - other.mass) + 2. * other.mass * dotprod_norm_other) / (self.mass + other.mass);
+        let m_other = (dotprod_norm_other * (other.mass - self.mass) + 2. * self.mass * dotprod_norm_self) / (self.mass + other.mass);
+
+
+        self.speed = tan_p * dotprod_tan_self  + norm_p * m_self ;
+        other.speed= tan_p * dotprod_tan_other + norm_p * m_other ;
+
     }
 
     ///Handle collision between two balls.
     /// this video has been very usefull to make the physics behind this :  
     ///     -> https://www.youtube.com/watch?v=LPzyNOHY3A4
     pub fn handle_collision_balls(&mut self, other: &mut Ball, _dt: f32) {
-        self.coliding_pos = other.position;
-        other.coliding_pos= self.position;
-
-
-        //does balls collides :
         if self.is_overlapping(other) {
 
+            self.coliding_pos = other.position;
 
-            //static collision :
+            //I static collision :
+            self.handle_static_collision(other);
 
-            //compute distance and overlap factor between balls
-            let dist = self.position.distance(other.position).max(0.0001);
-            let overlap = 0.5 * (dist - self.size - other.size);
-
-            //resolve overlap 
-            let s_delta_pos= -(self.position - other.position) * overlap / dist;
-            let o_delta_pos = (self.position - other.position) * overlap / dist;
-
-            //dynamic response using impulse (see: https://en.wikipedia.org/wiki/Inelastic_collision)
-
-            //inelastic collision :
-            let bounce = self.bounce.min(other.bounce);
-            let norm_p: Vec2 = (self.position - other.position) / dist; //normal vector
-
-            let mut s_delta_speed = Vec2::v_space_zero();
-            let mut o_delta_speed = Vec2::v_space_zero();
-
-            let rel_vel = (other.speed - self.speed).dot(norm_p);
-            if rel_vel <0.{
-                let norm_impulse =(1.+bounce)*(self.mass * other.mass) / ((self.mass + other.mass) * (other.speed - self.speed).dot(norm_p)).max(f32::EPSILON); 
-
-                s_delta_speed  = norm_p * norm_impulse/self.mass.max(f32::EPSILON);
-                o_delta_speed = -norm_p * norm_impulse/other.mass.max(f32::EPSILON);
-            }
             
-
-            //applying new pos and speed
-
-            self.speed += s_delta_speed;
-            self.position += s_delta_pos;
-
-            other.speed += o_delta_speed;
-            other.position += o_delta_pos;
-
+            //II dynamic response using impulse (see: https://en.wikipedia.org/wiki/Inelastic_collision)
+            // self.handle_dynamic_collision_elastic(other);
+            self.handle_dynamic_collision_inelastic(other);
+            
         }
     }
 
@@ -227,8 +258,10 @@ impl Ball {
         self.speed[0] += self.acc[0] * dt;
         self.speed[1] += self.acc[1] * dt;
 
-        self.speed[0] =  self.speed[0].clamp(-LIGHT_SPEED, LIGHT_SPEED);
-        self.speed[1] =  self.speed[1].clamp(-LIGHT_SPEED, LIGHT_SPEED);
+        self.speed[0] = self.speed[0].clamp(-LIGHT_SPEED, LIGHT_SPEED);
+        self.speed[1] = self.speed[1].clamp(-LIGHT_SPEED, LIGHT_SPEED);
+
+        println!("{:?}",self.speed.distance(self.position));
     }
 
     pub fn handle_gravity(&mut self) {
@@ -247,7 +280,7 @@ impl Ball {
 
     pub fn handle_color(&mut self) {
         // let f = f32::sin(self.id as f32 * f32::consts::FRAC_PI_2 ).abs();
-        self.color = hue_to_rgb(self.id as f32 * 4.*f32::consts::FRAC_PI_2 / 32.);
+        self.color = hue_to_rgb(self.id as f32 * 4. * f32::consts::FRAC_PI_2 / 32.);
     }
 }
 
@@ -261,15 +294,10 @@ impl As2dPoint for Ball {
     fn y(&self) -> f32 {
         self.position[1]
     }
-
-    #[inline]
-    fn set_pos(&mut self, pos: (f32, f32)) {
-        self.position = [pos.0, pos.1].into();
-    }
 }
 
-fn hue_to_rgb(h: f32) -> [f32;3] {
-    let h = h % (2.*f32::consts::PI);
+fn hue_to_rgb(h: f32) -> [f32; 3] {
+    let h = h % (2. * f32::consts::PI);
     let c = 1.0;
     let h_prime = h / (f32::consts::FRAC_PI_3);
     let x = c * (1.0 - ((h_prime % 2.0) - 1.0).abs());

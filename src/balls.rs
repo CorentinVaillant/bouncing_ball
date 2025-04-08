@@ -5,17 +5,16 @@ use core::f32;
 use glium::uniforms::DynamicUniforms;
 
 use crate::{
-    canvas::CanvasData,
-    one_ball::Ball,
-    quadtree::{AABB, Quadtree},
-    traits::CanvasDrawable,
+    canvas::CanvasData, constants::Vec2, one_ball::Ball, quadtree::{Quadtree, AABB}, traits::CanvasDrawable
 };
 
 pub struct Balls {
     pub boundary: AABB,
     pub balls: Quadtree<Ball, 4>,
 
-    last_rebuild: usize,
+    
+    time : f32,
+    last_ball_spawn_time :f32,
 
     pub z: f32,
 }
@@ -26,7 +25,8 @@ impl Balls {
             boundary,
             balls: Quadtree::empty(boundary),
 
-            last_rebuild: 0,
+            time :0.,
+            last_ball_spawn_time :0.,
 
             z: 0.,
         }
@@ -52,7 +52,8 @@ impl Balls {
             boundary,
             balls: qtree,
 
-            last_rebuild: 0,
+            time:0.,
+            last_ball_spawn_time:0.,
 
             z: 0.,
         }
@@ -94,9 +95,7 @@ impl CanvasDrawable for Balls {
     }
 
     fn update(&mut self, canva_info: &CanvasData, dt: f32) {
-        const PHYSIC_SUB_STEP: u16 = 5;
-        let sub_dt = dt / f32::from(PHYSIC_SUB_STEP);
-        let balls = &mut self.balls;
+        self.time += dt;
 
         let border: (f32, f32) = (
             (self.boundary.center.x + self.boundary.half_dim)
@@ -105,33 +104,57 @@ impl CanvasDrawable for Balls {
                 .min(canva_info.size.1 * canva_info.window_resolution.1 as f32),
         );
 
-        let range_mapping = |ball: &Ball| AABB::new((*ball.position.as_array()).into(), ball.size*1.5);
+        // if self.time - self.last_ball_spawn_time > 0.2{
+
+        //     self.last_ball_spawn_time = self.time;
+            
+        //     //adding balls :
+        //     let i_f = self.balls.len() as f32 / 20.;
+        //     let mut new_ball = Ball::new(
+        //         ((i_f/dt).sin().abs()+1.) * 5.,
+        //         [
+        //             border.0 / 10. + i_f.cos().abs() * 20.,
+        //             border.1 / 10. + i_f.sin().abs() * 20.,
+        //             ],
+        //             self.balls.len(),
+        //         );
+        //         new_ball.speed = Vec2::from([i_f.cos().abs(), i_f.sin().abs()]) * 100.;
+                
+        //         self.push_ball(new_ball);
+        // }
+
+        const PHYSIC_SUB_STEP: u16 = 5;
+        let sub_dt = dt / f32::from(PHYSIC_SUB_STEP);
+        let balls = &mut self.balls;
+
+        let range_mapping =
+            |ball: &Ball| AABB::new((*ball.position.as_array()).into(), ball.size *2.);
 
         let first_map = |ball: &mut Ball| {
             if !ball.do_physics {
                 return;
             }
             ball.reset_force();
+            ball.handle_friction();
             ball.handle_gravity();
+            ball.handle_border_colision_ball(border);
         };
-
+        
         let map_with_other = |ball: &mut Ball, other_ball: &mut Ball| {
             ball.handle_collision_balls(other_ball, sub_dt);
         };
-
+        
         let last_map = |ball: &mut Ball| {
             if !ball.do_physics {
                 return;
             }
-            ball.handle_border_colision_ball(border);
-            ball.handle_friction();
-
+            ball.apply_acceleration(sub_dt);
             ball.apply_acceleration(sub_dt);
             ball.apply_speed(sub_dt);
         };
 
         for _ in 0..PHYSIC_SUB_STEP {
-            balls.map_the_map_with_elem_in_range_then_map(
+            balls.map_then_map_with_elem_in_range_then_map(
                 first_map,
                 range_mapping,
                 map_with_other,
@@ -157,7 +180,7 @@ impl CanvasDrawable for Balls {
         }
         if !clicking_on_ball {
             println!("adding ball at :{coord:?}");
-            self.push_ball(Ball::new(10., coord.into(),self.balls.len()))
+            self.push_ball(Ball::new(10., coord.into(), self.balls.len()))
         }
     }
 

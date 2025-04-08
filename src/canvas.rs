@@ -23,6 +23,7 @@ pub struct Canvas {
 pub struct CanvasData {
     pub size: (f32, f32),
     pub position: (f32, f32), //%
+    pub frame_nb: usize,
 
     pub window_resolution: (u32, u32),
 }
@@ -33,6 +34,7 @@ impl Canvas {
             data: CanvasData {
                 position,
                 size: (1., 1.),
+                frame_nb:0,
 
                 window_resolution: (0, 0),
             },
@@ -62,8 +64,8 @@ impl Drawable for Canvas {
         let (vert_buff, ind_buff) = self.get_vert_buff(facade).unwrap();
 
         let mut param = DrawParameters::default();
-        // param.depth.test = DepthTest::IfMoreOrEqual;
-        param.depth.test = DepthTest::IfMore;
+        param.depth.test = DepthTest::IfMoreOrEqual;
+        //param.depth.test = DepthTest::IfMore;
 
         for elem in &self.elements {
             let mut uniforms = elem.canvas_uniforms();
@@ -103,6 +105,7 @@ impl CanvasDrawable for Canvas {
     }
 
     fn update(&mut self, _canva_info: &CanvasData, dt: f32) {
+        self.data.frame_nb +=1;
         for elem in &mut self.elements {
             elem.update(&self.data, dt);
         }
