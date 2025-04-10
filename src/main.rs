@@ -1,5 +1,5 @@
-use balls::Balls;
-use canvas::{Canvas, CanvasData};
+use balls::{one_ball::Ball, Balls};
+use canvas::{traits::{CanvasDrawable, Drawable}, Canvas, CanvasData};
 use glium::{
     Display, Program, Surface, backend,
     glutin::surface::WindowSurface,
@@ -11,20 +11,13 @@ use glium::{
         window::Window,
     },
 };
-use one_ball::Ball;
 use quadtree::AABB;
-use traits::{CanvasDrawable, Drawable};
 
+mod physics;
 mod balls;
 mod canvas;
-mod constants;
-mod one_ball;
 mod quadtree;
-mod traits;
 mod vertex;
-
-#[cfg(debug_assertions)]
-mod quadtree_test;
 
 fn main() {
     let event_loop = EventLoop::new().unwrap();

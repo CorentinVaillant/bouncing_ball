@@ -1,14 +1,14 @@
 #![allow(dead_code)]
 
+pub mod traits;
+
 use glium::{
     DepthTest, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer, backend::Facade,
     dynamic_uniform, index::PrimitiveType,
 };
+use traits::{CanvasDrawable, Drawable};
 
-use crate::{
-    traits::{self, CanvasDrawable, Drawable},
-    vertex::Vertex,
-};
+use crate::vertex::Vertex;
 
 pub struct Canvas {
     pub data: CanvasData,

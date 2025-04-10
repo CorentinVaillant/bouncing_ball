@@ -6,10 +6,7 @@ use glium::dynamic_uniform;
 use my_rust_matrix_lib::my_matrix_lib::prelude::{EuclidianSpace, VectorSpace};
 
 use crate::{
-    canvas::CanvasData,
-    constants::{FRICTION_COEF, GRAVITY_CONST, LIGHT_SPEED, MOUSE_ACCELERATION_FACTOR, Vec2},
-    quadtree::As2dPoint,
-    traits::CanvasDrawable,
+    canvas::{traits::CanvasDrawable, CanvasData}, physics::constants::{Vec2, FRICTION_COEF, GRAVITY_CONST, LIGHT_SPEED, MOUSE_ACCELERATION_FACTOR}, quadtree::As2dPoint
 };
 
 pub type Color = [f32; 3];

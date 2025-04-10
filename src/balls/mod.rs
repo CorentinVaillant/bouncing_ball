@@ -2,13 +2,14 @@
 
 use core::f32;
 
+pub mod one_ball;
+
 use glium::uniforms::DynamicUniforms;
+use one_ball::Ball;
 
 use crate::{
-    canvas::CanvasData,
-    one_ball::Ball,
-    quadtree::{AABB, Quadtree},
-    traits::CanvasDrawable,
+    canvas::{traits::CanvasDrawable, CanvasData},
+    quadtree::{Quadtree, AABB},
 };
 
 pub struct Balls {
