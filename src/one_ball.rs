@@ -23,11 +23,11 @@ pub struct Ball {
     pub id: usize,
 
     pub coliding_pos: Vec2,
+    pub nb_coll: usize,
 
     pub position: Vec2,
     pub speed: Vec2,
     pub acc: Vec2,
-    pub compression: f32,
 
     pub do_physics: bool,
     pub mass: f32,
@@ -46,10 +46,11 @@ impl Ball {
             id,
 
             coliding_pos: pos.into(),
+            nb_coll: 0,
+
             position: pos.into(),
             speed: [0.; 2].into(),
             acc: [0.; 2].into(),
-            compression: 0.,
 
             do_physics: true,
             mass: size * size,
@@ -136,8 +137,7 @@ impl CanvasDrawable for Ball {
 //-----------
 
 impl Ball {
-
-    const PHYS_MIN_DIST :f32 = 0.00001;
+    const PHYS_MIN_DIST: f32 = f32::EPSILON;
 
     pub fn handle_border_colision_ball(&mut self, (b_x, b_y): (f32, f32)) {
         let [x, y] = &mut self.position.as_mut_array();
@@ -169,87 +169,99 @@ impl Ball {
             < (self.size + other.size) * (self.size + other.size)
     }
 
-    fn handle_static_collision(&mut self, other: &mut Self){
-        let dist = self.position.distance(other.position).max(Self::PHYS_MIN_DIST);
+    fn handle_static_collision(&mut self, other: &mut Self) {
+        let dist = self
+            .position
+            .distance(other.position)
+            .max(Self::PHYS_MIN_DIST);
 
         //1. compute distance and overlap factor between balls
 
         let overlap = 0.5 * ((self.size + other.size) - dist).max(0.0);
 
         //2. resolve overlap
-        self.position  += (self.position - other.position) * overlap / dist;
+        self.position += (self.position - other.position) * overlap / dist;
         other.position -= (self.position - other.position) * overlap / dist;
     }
 
     #[allow(dead_code)]
-    fn handle_dynamic_collision_inelastic(&mut self, other:&mut Self){
-
+    fn handle_dynamic_collision_inelastic(&mut self, other: &mut Self) {
         const RESTITUTION_THRESHOLD: f32 = 0.5;
 
         let bounce = (self.bounce + other.bounce) / 2.;
 
         // 1. inelastic collision :
-    
+
         let rel_speed = self.speed - other.speed;
-        let norm_p = (self.position - other.position) / self.position.distance(other.position).max(Self::PHYS_MIN_DIST);
+        let norm_p = (self.position - other.position)
+            / self
+                .position
+                .distance(other.position)
+                .max(Self::PHYS_MIN_DIST);
         let rel_vel_along_normal = rel_speed.dot(norm_p);
 
         if rel_vel_along_normal > RESTITUTION_THRESHOLD {
-            return; 
+            return;
         }
 
-        let norm_p: Vec2 = (self.position - other.position) / self.position.distance(other.position).max(Self::PHYS_MIN_DIST);
+        let norm_p: Vec2 = (self.position - other.position)
+            / self
+                .position
+                .distance(other.position)
+                .max(Self::PHYS_MIN_DIST);
 
         let norm_impulse = rel_vel_along_normal
             * ((self.mass * other.mass) / (self.mass + other.mass))
             * (1.0 + bounce);
 
-        self.speed  -= norm_p * (norm_impulse / self.mass.max(f32::EPSILON));
+        self.speed -= norm_p * (norm_impulse / self.mass.max(f32::EPSILON));
         other.speed += norm_p * (norm_impulse / other.mass.max(f32::EPSILON));
-        
     }
 
     #[allow(dead_code)]
-    fn handle_dynamic_collision_elastic(&mut self, other : &mut Self){
-
-        let norm_p = (self.position - other.position) / self.position.distance(other.position).max(Self::PHYS_MIN_DIST);
-        let tan_p : Vec2 = [-norm_p[0], norm_p[1]].into();
+    fn handle_dynamic_collision_elastic(&mut self, other: &mut Self) {
+        let norm_p = (self.position - other.position)
+            / self
+                .position
+                .distance(other.position)
+                .max(Self::PHYS_MIN_DIST);
+        let tan_p: Vec2 = [-norm_p[0], norm_p[1]].into();
 
         let dotprod_tan_self = self.speed.dot(tan_p);
         let dotprod_tan_other = other.speed.dot(tan_p);
         let dotprod_norm_self = self.speed.dot(norm_p);
         let dotprod_norm_other = other.speed.dot(norm_p);
 
+        let m_self = (dotprod_norm_self * (self.mass - other.mass)
+            + 2. * other.mass * dotprod_norm_other)
+            / (self.mass + other.mass);
+        let m_other = (dotprod_norm_other * (other.mass - self.mass)
+            + 2. * self.mass * dotprod_norm_self)
+            / (self.mass + other.mass);
 
-        let m_self = (dotprod_norm_self * (self.mass - other.mass) + 2. * other.mass * dotprod_norm_other) / (self.mass + other.mass);
-        let m_other = (dotprod_norm_other * (other.mass - self.mass) + 2. * self.mass * dotprod_norm_self) / (self.mass + other.mass);
-
-
-        self.speed = tan_p * dotprod_tan_self  + norm_p * m_self ;
-        other.speed= tan_p * dotprod_tan_other + norm_p * m_other ;
-
+        self.speed = tan_p * dotprod_tan_self + norm_p * m_self;
+        other.speed = tan_p * dotprod_tan_other + norm_p * m_other;
     }
 
     ///Handle collision between two balls.
     /// this video has been very usefull to make the physics behind this :  
     ///     -> https://www.youtube.com/watch?v=LPzyNOHY3A4
     pub fn handle_collision_balls(&mut self, other: &mut Ball, _dt: f32) {
-        if self.is_overlapping(other) {
-
+        if self.is_overlapping(other) && self.nb_coll < 10 {
             self.coliding_pos = other.position;
+            self.nb_coll += 1;
 
             //I static collision :
             self.handle_static_collision(other);
 
-            
             //II dynamic response using impulse (see: https://en.wikipedia.org/wiki/Inelastic_collision)
             // self.handle_dynamic_collision_elastic(other);
             self.handle_dynamic_collision_inelastic(other);
-            
         }
     }
 
     pub fn reset_force(&mut self) {
+        self.nb_coll = 0;
         self.coliding_pos = self.position;
         self.acc = Vec2::v_space_zero();
     }
@@ -260,13 +272,10 @@ impl Ball {
 
         self.speed[0] = self.speed[0].clamp(-LIGHT_SPEED, LIGHT_SPEED);
         self.speed[1] = self.speed[1].clamp(-LIGHT_SPEED, LIGHT_SPEED);
-
-        println!("{:?}",self.speed.distance(self.position));
     }
 
     pub fn handle_gravity(&mut self) {
         self.acc[1] += GRAVITY_CONST * self.mass;
-        self.compression += GRAVITY_CONST * self.mass;
     }
 
     pub fn handle_friction(&mut self) {

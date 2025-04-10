@@ -63,12 +63,11 @@ impl AABB {
         }
     }
 
-    fn tchebychev_dist(&self,point:&Point)->f32{
+    fn tchebychev_dist(&self, point: &Point) -> f32 {
         let dx = (point.x - self.center.x).abs();
         let dy = (point.y - self.center.y).abs();
         dx.max(dy)
     }
-
 
     #[inline]
     pub fn contain_pt(&self, point: &Point) -> bool {
@@ -124,11 +123,15 @@ pub enum QuadtreeError {
     InvalidCoord((f32, f32)),
 }
 
-impl std::fmt::Display for QuadtreeError{
+impl std::fmt::Display for QuadtreeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            QuadtreeError::OutOfBoundary(aabb, pt) => write!(f,"{:?} does not contains the point {:?}.",aabb,pt),
-            QuadtreeError::InvalidCoord(coord) => write!(f,"point of coord {:?} are invalid.",{coord}),
+            QuadtreeError::OutOfBoundary(aabb, pt) => {
+                write!(f, "{:?} does not contains the point {:?}.", aabb, pt)
+            }
+            QuadtreeError::InvalidCoord(coord) => {
+                write!(f, "point of coord {:?} are invalid.", { coord })
+            }
         }
     }
 }
@@ -402,16 +405,7 @@ impl<const N: usize> Node<N> {
         }
     }
 
-    //unused function
-    // fn subdivide(&mut self) {
-    //     if let NodeData::Leaf(leaf) = self.data {
-    //         let child = leaf.subdivide_into_child_data(self.boundary);
-    //         self.data = NodeData::Child(child)
-    //     }
-    // }
-
     fn insert(&mut self, p_i: IndexPoint) -> Result<(), QuadtreeError> {
-
         #[allow(unused_variables)]
         #[cfg(debug_assertions)]
         let max_loop = 500_000;
@@ -419,7 +413,6 @@ impl<const N: usize> Node<N> {
         let max_loop = 200_000;
         #[cfg(debug_assertions)]
         let mut it_num = 0;
-
 
         if !p_i.as_point().is_valid() {
             return Err(QuadtreeError::InvalidCoord((p_i.x, p_i.y)));
@@ -474,7 +467,8 @@ impl<const N: usize> Node<N> {
                 }
             }
 
-            #[cfg(debug_assertions)]{
+            #[cfg(debug_assertions)]
+            {
                 it_num += 1;
                 debug_assert!(it_num < max_loop, "to much iteration \n {:?}", self)
             }

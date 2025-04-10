@@ -34,7 +34,7 @@ impl Canvas {
             data: CanvasData {
                 position,
                 size: (1., 1.),
-                frame_nb:0,
+                frame_nb: 0,
 
                 window_resolution: (0, 0),
             },
@@ -105,7 +105,7 @@ impl CanvasDrawable for Canvas {
     }
 
     fn update(&mut self, _canva_info: &CanvasData, dt: f32) {
-        self.data.frame_nb +=1;
+        self.data.frame_nb += 1;
         for elem in &mut self.elements {
             elem.update(&self.data, dt);
         }

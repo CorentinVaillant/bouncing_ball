@@ -5,16 +5,18 @@ use core::f32;
 use glium::uniforms::DynamicUniforms;
 
 use crate::{
-    canvas::CanvasData, constants::Vec2, one_ball::Ball, quadtree::{Quadtree, AABB}, traits::CanvasDrawable
+    canvas::CanvasData,
+    one_ball::Ball,
+    quadtree::{AABB, Quadtree},
+    traits::CanvasDrawable,
 };
 
 pub struct Balls {
     pub boundary: AABB,
     pub balls: Quadtree<Ball, 4>,
 
-    
-    time : f32,
-    last_ball_spawn_time :f32,
+    time: f32,
+    last_ball_spawn_time: f32,
 
     pub z: f32,
 }
@@ -25,8 +27,8 @@ impl Balls {
             boundary,
             balls: Quadtree::empty(boundary),
 
-            time :0.,
-            last_ball_spawn_time :0.,
+            time: 0.,
+            last_ball_spawn_time: 0.,
 
             z: 0.,
         }
@@ -52,8 +54,8 @@ impl Balls {
             boundary,
             balls: qtree,
 
-            time:0.,
-            last_ball_spawn_time:0.,
+            time: 0.,
+            last_ball_spawn_time: 0.,
 
             z: 0.,
         }
@@ -107,7 +109,7 @@ impl CanvasDrawable for Balls {
         // if self.time - self.last_ball_spawn_time > 0.2{
 
         //     self.last_ball_spawn_time = self.time;
-            
+
         //     //adding balls :
         //     let i_f = self.balls.len() as f32 / 20.;
         //     let mut new_ball = Ball::new(
@@ -119,7 +121,7 @@ impl CanvasDrawable for Balls {
         //             self.balls.len(),
         //         );
         //         new_ball.speed = Vec2::from([i_f.cos().abs(), i_f.sin().abs()]) * 100.;
-                
+
         //         self.push_ball(new_ball);
         // }
 
@@ -128,7 +130,7 @@ impl CanvasDrawable for Balls {
         let balls = &mut self.balls;
 
         let range_mapping =
-            |ball: &Ball| AABB::new((*ball.position.as_array()).into(), ball.size *2.);
+            |ball: &Ball| AABB::new((*ball.position.as_array()).into(), ball.size * 2.);
 
         let first_map = |ball: &mut Ball| {
             if !ball.do_physics {
@@ -139,11 +141,11 @@ impl CanvasDrawable for Balls {
             ball.handle_gravity();
             ball.handle_border_colision_ball(border);
         };
-        
+
         let map_with_other = |ball: &mut Ball, other_ball: &mut Ball| {
             ball.handle_collision_balls(other_ball, sub_dt);
         };
-        
+
         let last_map = |ball: &mut Ball| {
             if !ball.do_physics {
                 return;

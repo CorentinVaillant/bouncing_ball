@@ -234,7 +234,7 @@ impl ApplicationHandler for App {
 const DUMMY_CANVA_INFO: CanvasData = CanvasData {
     size: (0., 0.),
     position: (0., 0.),
-    frame_nb:0,
+    frame_nb: 0,
 
     window_resolution: (0, 0),
 };
