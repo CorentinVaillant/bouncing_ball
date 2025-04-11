@@ -8,8 +8,8 @@ use glium::uniforms::DynamicUniforms;
 use one_ball::Ball;
 
 use crate::{
-    canvas::{traits::CanvasDrawable, CanvasData},
-    quadtree::{Quadtree, AABB},
+    canvas::{CanvasData, traits::CanvasDrawable},
+    quadtree::{AABB, Quadtree},
 };
 
 pub struct Balls {
@@ -107,24 +107,24 @@ impl CanvasDrawable for Balls {
                 .min(canva_info.size.1 * canva_info.window_resolution.1 as f32),
         );
 
-        // if self.time - self.last_ball_spawn_time > 0.2{
+        if self.time - self.last_ball_spawn_time > 0.05{
 
-        //     self.last_ball_spawn_time = self.time;
+            self.last_ball_spawn_time = self.time;
 
-        //     //adding balls :
-        //     let i_f = self.balls.len() as f32 / 20.;
-        //     let mut new_ball = Ball::new(
-        //         ((i_f/dt).sin().abs()+1.) * 5.,
-        //         [
-        //             border.0 / 10. + i_f.cos().abs() * 20.,
-        //             border.1 / 10. + i_f.sin().abs() * 20.,
-        //             ],
-        //             self.balls.len(),
-        //         );
-        //         new_ball.speed = Vec2::from([i_f.cos().abs(), i_f.sin().abs()]) * 100.;
+            //adding balls :
+            let i_f = self.balls.len() as f32 / 20.;
+            let mut new_ball = Ball::new(
+                2.,//((i_f/dt).sin().abs()+1.) * 5.,
+                [
+                    border.0 / 10. + i_f.cos().abs() * 20.,
+                    border.1 / 10. + i_f.sin().abs() * 20.,
+                    ],
+                    self.balls.len(),
+                );
+                new_ball.speed = crate::physics::constants::Vec2::from([i_f.cos().abs(), i_f.sin().abs()]) * 100.;
 
-        //         self.push_ball(new_ball);
-        // }
+                self.push_ball(new_ball);
+        }
 
         const PHYSIC_SUB_STEP: u16 = 5;
         let sub_dt = dt / f32::from(PHYSIC_SUB_STEP);

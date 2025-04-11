@@ -6,7 +6,11 @@ use glium::dynamic_uniform;
 use my_rust_matrix_lib::my_matrix_lib::prelude::{EuclidianSpace, VectorSpace};
 
 use crate::{
-    canvas::{traits::CanvasDrawable, CanvasData}, physics::constants::{Vec2, FRICTION_COEF, GRAVITY_CONST, LIGHT_SPEED, MOUSE_ACCELERATION_FACTOR}, quadtree::As2dPoint
+    canvas::{traits::CanvasDrawable, CanvasData},
+    physics::{constants::{
+        Vec2, FRICTION_COEF, GRAVITY_CONST, LIGHT_SPEED, MOUSE_ACCELERATION_FACTOR
+    }, traits::Physics},
+    quadtree::As2dPoint,
 };
 
 pub type Color = [f32; 3];
@@ -29,6 +33,8 @@ pub struct Ball {
     pub do_physics: bool,
     pub mass: f32,
     pub bounce: f32,
+
+    canva_info : Option<CanvasData>,
 }
 
 impl Ball {
@@ -52,6 +58,8 @@ impl Ball {
             do_physics: true,
             mass: size * size,
             bounce: 0.3,
+
+            canva_info : None,
         }
     }
 }
@@ -66,28 +74,8 @@ impl CanvasDrawable for Ball {
     }
 
     fn update(&mut self, canva_info: &CanvasData, dt: f32) {
-        if !self.do_physics {
-            return;
-        }
-
-        const PHYSIC_SUB_STEP: u16 = 20;
-        let sub_dt = dt / f32::from(PHYSIC_SUB_STEP);
-
-        let border: (f32, f32) = (
-            canva_info.size.0 * canva_info.window_resolution.0 as f32,
-            canva_info.size.1 * canva_info.window_resolution.1 as f32,
-        );
-
-        for _ in 0..PHYSIC_SUB_STEP {
-            self.reset_force();
-            self.handle_gravity();
-            self.handle_border_colision_ball(border);
-
-            self.apply_acceleration(sub_dt);
-            self.handle_friction();
-            self.apply_speed(sub_dt);
-            self.handle_color();
-        }
+        self.canva_info = Some(*canva_info);
+        self.physics_update(dt);
     }
     fn canvas_uniforms(&self) -> Vec<glium::uniforms::DynamicUniforms> {
         vec![dynamic_uniform! {
@@ -132,6 +120,34 @@ impl CanvasDrawable for Ball {
 //-----------
 //| Physics |
 //-----------
+
+
+impl Physics for Ball{
+    fn physics_update(&mut self, dt: f32) {
+        if !self.do_physics {
+            return;
+        }
+
+        const PHYSIC_SUB_STEP: u16 = 20;
+        let sub_dt = dt / f32::from(PHYSIC_SUB_STEP);
+
+        let border: (f32, f32) = (
+            self.canva_info.map(|c|c.size.0).unwrap_or(0.) * self.canva_info.map(|c|c.window_resolution.0 as f32).unwrap_or(0.),
+            self.canva_info.map(|c|c.size.1).unwrap_or(0.) * self.canva_info.map(|c|c.window_resolution.1 as f32).unwrap_or(0.),
+        );
+
+        for _ in 0..PHYSIC_SUB_STEP {
+            self.reset_force();
+            self.handle_gravity();
+            self.handle_border_colision_ball(border);
+
+            self.apply_acceleration(sub_dt);
+            self.handle_friction();
+            self.apply_speed(sub_dt);
+            self.handle_color();
+        }
+    }
+}
 
 impl Ball {
     const PHYS_MIN_DIST: f32 = f32::EPSILON;
