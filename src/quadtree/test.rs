@@ -8,8 +8,8 @@ mod tests {
         let inside_point = Point { x: 6.0, y: 6.0 };
         let outside_point = Point { x: 9.0, y: 9.0 };
 
-        assert!(aabb.contain_pt(&inside_point));
-        assert!(!aabb.contain_pt(&outside_point));
+        assert!(aabb.contain_pt(inside_point));
+        assert!(!aabb.contain_pt(outside_point));
     }
 
     #[test]
@@ -18,8 +18,8 @@ mod tests {
         let aabb2 = AABB::new((6.0, 6.0), 3.0);
         let aabb3 = AABB::new((10.0, 10.0), 2.0);
 
-        assert!(aabb1.intersect(&aabb2));
-        assert!(!aabb1.intersect(&aabb3));
+        assert!(aabb1.intersect(aabb2));
+        assert!(!aabb1.intersect(aabb3));
     }
 
     #[test]
@@ -95,10 +95,11 @@ mod tests {
         let boundary = AABB::new((0., 0.), half_dim + 500.);
         let mut qtree: Quadtree<TestPoint, 3> = Quadtree::empty(boundary);
         for i in 0..POINT_NB {
+            println!("iter : {i}");
             let i_f = half_dim - i as f32 / 2.;
             let p = TestPoint {
                 x: i_f,
-                y: f32::sin(i as f32) * i_f,
+                y: f32::sin(i as f32),
             };
             qtree.insert(p).unwrap();
         }

@@ -1,5 +1,8 @@
-use balls::{one_ball::Ball, Balls};
-use canvas::{traits::{CanvasDrawable, Drawable}, Canvas, CanvasData};
+use balls::{Balls, one_ball::Ball};
+use canvas::{
+    Canvas, CanvasData,
+    traits::{CanvasDrawable, Drawable},
+};
 use glium::{
     Display, Program, Surface, backend,
     glutin::surface::WindowSurface,
@@ -13,9 +16,9 @@ use glium::{
 };
 use quadtree::AABB;
 
-mod physics;
 mod balls;
 mod canvas;
+mod physics;
 mod quadtree;
 mod vertex;
 
