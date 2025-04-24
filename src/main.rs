@@ -1,4 +1,4 @@
-use balls::{Balls, one_ball::Ball};
+use balls::Balls;
 use canvas::{
     Canvas, CanvasData,
     traits::{CanvasDrawable, Drawable},
@@ -8,19 +8,16 @@ use glium::{
     glutin::surface::WindowSurface,
     winit::{
         application::ApplicationHandler,
-        event::{DeviceEvent, ElementState, MouseButton, WindowEvent},
+        event::{ElementState, MouseButton, WindowEvent},
         event_loop::{self, EventLoop},
         keyboard,
         window::Window,
     },
 };
-use quadtree::AABB;
+use my_glium_util::{canvas, datastruct::aabb::Aabb};
 
 mod balls;
-mod canvas;
 mod physics;
-mod quadtree;
-mod vertex;
 
 fn main() {
     let event_loop = EventLoop::new().unwrap();
@@ -42,21 +39,8 @@ fn main() {
         window.inner_size().height as f32,
     );
 
-    let boundary = AABB::new((b_x / 2., b_y / 2.), b_x.max(b_y));
-    let mut balls = Balls::empty(boundary);
-
-    for i in 0..0 {
-        let i_f = i as f32;
-        let new_ball = Ball::new(
-            (i_f.sin().abs() + 1.) * 10.,
-            [
-                i_f * 20. % window.inner_size().width as f32,
-                i_f * 20. % window.inner_size().height as f32,
-            ],
-            i,
-        );
-        balls.push_ball(new_ball);
-    }
+    let boundary = Aabb::new((b_x / 2., b_y / 2.), b_x.max(b_y));
+    let balls = Balls::empty(boundary);
 
     println!("window dimension :{b_x},{b_y}");
     canva.push_elem(Box::new(balls));
@@ -179,17 +163,6 @@ impl ApplicationHandler for App {
 
             _ => (),
         };
-    }
-
-    fn device_event(
-        &mut self,
-        _event_loop: &event_loop::ActiveEventLoop,
-        _device_id: glium::winit::event::DeviceId,
-        event: DeviceEvent,
-    ) {
-        match event {
-            _ => (),
-        }
     }
 
     fn exiting(&mut self, event_loop: &event_loop::ActiveEventLoop) {

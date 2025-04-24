@@ -1,16 +1,13 @@
-// #![allow(dead_code, unused_variables)]
-
-use core::f32;
-
 use glium::dynamic_uniform;
-use my_rust_matrix_lib::my_matrix_lib::prelude::{EuclidianSpace, VectorSpace};
+use my_glium_util::{
+    canvas::{CanvasData, traits::CanvasDrawable},
+    datastruct::points::As2dPoint,
+    math::{EuclidianSpace, Vec2, VectorSpace},
+};
 
-use crate::{
-    canvas::{traits::CanvasDrawable, CanvasData},
-    physics::{constants::{
-        Vec2, FRICTION_COEF, GRAVITY_CONST, LIGHT_SPEED, MOUSE_ACCELERATION_FACTOR
-    }, traits::Physics},
-    quadtree::As2dPoint,
+use crate::physics::{
+    constants::{FRICTION_COEF, GRAVITY_CONST, LIGHT_SPEED, MOUSE_ACCELERATION_FACTOR},
+    traits::Physics,
 };
 
 pub type Color = [f32; 3];
@@ -34,7 +31,7 @@ pub struct Ball {
     pub mass: f32,
     pub bounce: f32,
 
-    canva_info : Option<CanvasData>,
+    canva_info: Option<CanvasData>,
 }
 
 impl Ball {
@@ -59,7 +56,7 @@ impl Ball {
             mass: size * size,
             bounce: 0.3,
 
-            canva_info : None,
+            canva_info: None,
         }
     }
 }
@@ -121,8 +118,7 @@ impl CanvasDrawable for Ball {
 //| Physics |
 //-----------
 
-
-impl Physics for Ball{
+impl Physics for Ball {
     fn physics_update(&mut self, dt: f32) {
         if !self.do_physics {
             return;
@@ -132,8 +128,16 @@ impl Physics for Ball{
         let sub_dt = dt / f32::from(PHYSIC_SUB_STEP);
 
         let border: (f32, f32) = (
-            self.canva_info.map(|c|c.size.0).unwrap_or(0.) * self.canva_info.map(|c|c.window_resolution.0 as f32).unwrap_or(0.),
-            self.canva_info.map(|c|c.size.1).unwrap_or(0.) * self.canva_info.map(|c|c.window_resolution.1 as f32).unwrap_or(0.),
+            self.canva_info.map(|c| c.size.0).unwrap_or(0.)
+                * self
+                    .canva_info
+                    .map(|c| c.window_resolution.0 as f32)
+                    .unwrap_or(0.),
+            self.canva_info.map(|c| c.size.1).unwrap_or(0.)
+                * self
+                    .canva_info
+                    .map(|c| c.window_resolution.1 as f32)
+                    .unwrap_or(0.),
         );
 
         for _ in 0..PHYSIC_SUB_STEP {
@@ -150,7 +154,8 @@ impl Physics for Ball{
 }
 
 impl Ball {
-    const PHYS_MIN_DIST: f32 = f32::EPSILON;
+    const PHYS_MIN_DIST: f32 = 0.001;
+    const MAX_VEL: f32 = LIGHT_SPEED / 1_000.;
 
     pub fn handle_border_colision_ball(&mut self, (b_x, b_y): (f32, f32)) {
         let [x, y] = &mut self.position.as_mut_array();
@@ -205,29 +210,27 @@ impl Ball {
 
         // 1. inelastic collision :
 
+        let dist = self
+            .position
+            .distance(other.position)
+            .max(Self::PHYS_MIN_DIST);
+
         let rel_speed = self.speed - other.speed;
-        let norm_p = (self.position - other.position)
-            / self
-                .position
-                .distance(other.position)
-                .max(Self::PHYS_MIN_DIST);
+        let norm_p = (self.position - other.position) / dist;
+
         let rel_vel_along_normal = rel_speed.dot(norm_p);
 
         if rel_vel_along_normal > RESTITUTION_THRESHOLD {
             return;
         }
 
-        let norm_p: Vec2 = (self.position - other.position)
-            / self
-                .position
-                .distance(other.position)
-                .max(Self::PHYS_MIN_DIST);
+        let norm_p: Vec2 = (self.position - other.position) / dist;
 
         let norm_impulse = rel_vel_along_normal
             * ((self.mass * other.mass) / (self.mass + other.mass))
             * (1.0 + bounce);
 
-        self.speed -= norm_p * (norm_impulse / self.mass.max(f32::EPSILON));
+        self.speed  -= norm_p * (norm_impulse / self.mass.max(f32::EPSILON));
         other.speed += norm_p * (norm_impulse / other.mass.max(f32::EPSILON));
     }
 
@@ -260,7 +263,7 @@ impl Ball {
     /// this video has been very usefull to make the physics behind this :  
     ///     -> https://www.youtube.com/watch?v=LPzyNOHY3A4
     pub fn handle_collision_balls(&mut self, other: &mut Ball, _dt: f32) {
-        if self.is_overlapping(other) && self.nb_coll < 10 {
+        if self.is_overlapping(other) && self.nb_coll < 100 {
             self.coliding_pos = other.position;
             self.nb_coll += 1;
 
@@ -283,8 +286,6 @@ impl Ball {
         self.speed[0] += self.acc[0] * dt;
         self.speed[1] += self.acc[1] * dt;
 
-        self.speed[0] = self.speed[0].clamp(-LIGHT_SPEED, LIGHT_SPEED);
-        self.speed[1] = self.speed[1].clamp(-LIGHT_SPEED, LIGHT_SPEED);
     }
 
     pub fn handle_gravity(&mut self) {
@@ -296,17 +297,20 @@ impl Ball {
     }
 
     pub fn apply_speed(&mut self, dt: f32) {
+        self.speed[0] = self.speed[0].clamp(-Self::MAX_VEL, Self::MAX_VEL);
+        self.speed[1] = self.speed[1].clamp(-Self::MAX_VEL, Self::MAX_VEL);
+
         self.position[0] += self.speed[0] * dt;
         self.position[1] += self.speed[1] * dt;
     }
 
     pub fn handle_color(&mut self) {
         // let f = f32::sin(self.id as f32 * f32::consts::FRAC_PI_2 ).abs();
-        self.color = hue_to_rgb(self.id as f32 * 4. * f32::consts::FRAC_PI_2 / 32.);
+        self.color = hue_to_rgb(self.id as f32 * 4. * std::f32::consts::FRAC_PI_2 / 32.);
     }
 }
 
-impl As2dPoint for Ball {
+impl As2dPoint<f32> for Ball {
     #[inline]
     fn x(&self) -> f32 {
         self.position[0]
@@ -319,9 +323,9 @@ impl As2dPoint for Ball {
 }
 
 fn hue_to_rgb(h: f32) -> [f32; 3] {
-    let h = h % (2. * f32::consts::PI);
+    let h = h % (2. * std::f32::consts::PI);
     let c = 1.0;
-    let h_prime = h / (f32::consts::FRAC_PI_3);
+    let h_prime = h / (std::f32::consts::FRAC_PI_3);
     let x = c * (1.0 - ((h_prime % 2.0) - 1.0).abs());
 
     match h_prime as u32 {

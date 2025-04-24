@@ -44,10 +44,10 @@ void main() {
 
     gl_FragDepth = z;
   }
-  // if (line_segment(gl_FragCoord.xy,inv_position,inv_collision,1.) != 1.){
-  //   fragColor = vec4(1.,1.,1.,1.);
-  //   gl_FragDepth = z;
-  // }
+  if (line_segment(gl_FragCoord.xy,inv_position,inv_collision,1.) != 1.){
+    fragColor = vec4(1.,1.,1.,1.);
+    gl_FragDepth = z;
+  }
   else if (length(inv_position-gl_FragCoord.xy) <=(radius*0.95)){
     fragColor = vec4(color.xyz,1.);
     gl_FragDepth = z;

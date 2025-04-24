@@ -5,16 +5,16 @@ use core::f32;
 pub mod one_ball;
 
 use glium::uniforms::DynamicUniforms;
+use my_glium_util::{
+    canvas::{CanvasData, traits::CanvasDrawable},
+    datastruct::{aabb::Aabb, quadtree::Quadtree},
+    math::Vec2,
+};
 use one_ball::Ball;
 
-use crate::{
-    canvas::{CanvasData, traits::CanvasDrawable},
-    quadtree::{AABB, Quadtree},
-};
-
 pub struct Balls {
-    pub boundary: AABB,
-    pub balls: Quadtree<Ball, 4>,
+    pub boundary: Aabb<f32>,
+    pub balls: Quadtree<f32, Ball, 4>,
 
     time: f32,
     last_ball_spawn_time: f32,
@@ -23,7 +23,7 @@ pub struct Balls {
 }
 
 impl Balls {
-    pub fn empty(boundary: AABB) -> Self {
+    pub fn empty(boundary: Aabb<f32>) -> Self {
         Self {
             boundary,
             balls: Quadtree::empty(boundary),
@@ -35,7 +35,7 @@ impl Balls {
         }
     }
 
-    pub fn new(boundary: AABB, balls: Vec<Ball>) -> Self {
+    pub fn new(boundary: Aabb<f32>, balls: Vec<Ball>) -> Self {
         let mut qtree = Quadtree::empty(boundary);
         for mut b in balls {
             if qtree.insert(b).is_err() {
@@ -107,31 +107,43 @@ impl CanvasDrawable for Balls {
                 .min(canva_info.size.1 * canva_info.window_resolution.1 as f32),
         );
 
-        if self.time - self.last_ball_spawn_time > 0.05{
-
+        if self.time - self.last_ball_spawn_time > 0.05 {
             self.last_ball_spawn_time = self.time;
 
             //adding balls :
             let i_f = self.balls.len() as f32 / 20.;
             let mut new_ball = Ball::new(
-                2.,//((i_f/dt).sin().abs()+1.) * 5.,
+                5., //((i_f/dt).sin().abs()+1.) * 5.,
                 [
                     border.0 / 10. + i_f.cos().abs() * 20.,
                     border.1 / 10. + i_f.sin().abs() * 20.,
-                    ],
-                    self.balls.len(),
-                );
-                new_ball.speed = crate::physics::constants::Vec2::from([i_f.cos().abs(), i_f.sin().abs()]) * 100.;
+                ],
+                self.balls.len(),
+            );
+            new_ball.speed = Vec2::from([i_f.cos().abs(), i_f.sin().abs()]) * 100.;
 
-                self.push_ball(new_ball);
+            self.push_ball(new_ball);
+
+            let i_f = self.balls.len() as f32 / 20.;
+            let mut new_ball = Ball::new(
+                3., //((i_f/dt).sin().abs()+1.) * 5.,
+                [
+                    border.0 - border.0 / 10. + i_f.cos().abs() * 20.,
+                    border.1 / 10. + i_f.sin().abs() * 20.,
+                ],
+                self.balls.len(),
+            );
+            new_ball.speed = Vec2::from([i_f.cos().abs(), i_f.sin().abs()]) * 100.;
+
+            self.push_ball(new_ball);
         }
 
-        const PHYSIC_SUB_STEP: u16 = 5;
+        const PHYSIC_SUB_STEP: u16 = 10;
         let sub_dt = dt / f32::from(PHYSIC_SUB_STEP);
         let balls = &mut self.balls;
 
         let range_mapping =
-            |ball: &Ball| AABB::new((*ball.position.as_array()).into(), ball.size * 2.);
+            |ball: &Ball| Aabb::new((*ball.position.as_array()).into(), ball.size * 2.);
 
         let first_map = |ball: &mut Ball| {
             if !ball.do_physics {
@@ -209,7 +221,7 @@ impl CanvasDrawable for Balls {
 
     fn on_window_resized(&mut self, new_size: (u32, u32)) {
         let (b_x, b_y) = (new_size.0 as f32, new_size.1 as f32);
-        let boundary = AABB::new((b_x / 2., b_y / 2.), b_x.max(b_y));
+        let boundary = Aabb::new((b_x / 2., b_y / 2.), b_x.max(b_y));
 
         let _ = self.balls.change_bounds(boundary);
 
