@@ -14,7 +14,7 @@ use one_ball::Ball;
 
 pub struct Balls {
     pub boundary: Aabb<f32>,
-    pub balls: Quadtree<f32, Ball, 4>,
+    pub balls: Quadtree<f32, Ball, 10>,
 
     time: f32,
     last_ball_spawn_time: f32,
@@ -143,7 +143,7 @@ impl CanvasDrawable for Balls {
         let balls = &mut self.balls;
 
         let range_mapping =
-            |ball: &Ball| Aabb::new((*ball.position.as_array()).into(), ball.size * 2.);
+            |ball: &Ball| Aabb::new((*ball.position.as_array()).into(), ball.size );
 
         let first_map = |ball: &mut Ball| {
             if !ball.do_physics {
@@ -224,6 +224,7 @@ impl CanvasDrawable for Balls {
         let boundary = Aabb::new((b_x / 2., b_y / 2.), b_x.max(b_y));
 
         let _ = self.balls.change_bounds(boundary);
+        println!("resized !");
 
         for elem in self.balls.iter_mut() {
             elem.on_window_resized(new_size);
